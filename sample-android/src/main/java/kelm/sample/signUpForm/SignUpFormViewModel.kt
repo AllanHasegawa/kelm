@@ -14,7 +14,7 @@ import kelm.sample.signUpForm.SignUpFormContract.EmailError
 import kelm.sample.signUpForm.SignUpFormContract.Model
 import kelm.sample.signUpForm.SignUpFormContract.Msg
 import kelm.sample.signUpForm.SignUpFormContract.PasswordError
-import java.util.*
+import java.util.UUID
 
 class SignUpFormViewModel : ViewModel() {
     val msgSubj = PublishSubject.create<Msg>()

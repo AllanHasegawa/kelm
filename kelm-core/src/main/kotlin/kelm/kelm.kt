@@ -5,7 +5,7 @@ import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.BehaviorSubject
 import io.reactivex.subjects.PublishSubject
-import java.util.*
+import java.util.UUID
 
 abstract class Cmd(open val id: String = randomUuid()) {
     companion object {

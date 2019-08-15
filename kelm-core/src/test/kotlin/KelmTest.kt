@@ -2,7 +2,11 @@ import io.reactivex.Observable
 import io.reactivex.observers.TestObserver
 import io.reactivex.schedulers.TestScheduler
 import io.reactivex.subjects.PublishSubject
-import kelm.*
+import kelm.CmdError
+import kelm.Kelm
+import kelm.SubContext
+import kelm.SubscriptionError
+import kelm.UpdateContext
 import org.spekframework.spek2.Spek
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
