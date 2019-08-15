@@ -39,7 +39,7 @@ class ClockSampleActivity : AppCompatActivity() {
 
         stateDisposable = Kelm
             .build<Model, Msg, Nothing, Sub>(
-                msgObserver = msgSubj,
+                msgInput = msgSubj,
                 initModel = ClockContract.initModel(),
                 subscriptions = { model, _, _ -> subscriptions(model) },
                 subToObservable = { sub ->

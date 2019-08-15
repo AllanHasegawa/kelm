@@ -29,7 +29,7 @@ class CounterSampleActivity : AppCompatActivity() {
 
         stateDisposable = Kelm
             .build<Model, Msg, Nothing, Nothing>(
-                msgObserver = msgSubj,
+                msgInput = msgSubj,
                 initModel = CounterContract.initModel(),
                 update = { model, msg ->
                     when (msg) {

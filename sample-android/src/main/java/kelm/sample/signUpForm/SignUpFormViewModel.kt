@@ -27,7 +27,7 @@ class SignUpFormViewModel : ViewModel() {
     init {
         streamDisposable = Kelm
             .build<Model, Msg, Cmd, Nothing>(
-                msgObserver = msgSubj,
+                msgInput = msgSubj,
                 initModel = initModel(),
                 cmdToMaybe = ::cmdToMaybe,
                 update = { model, msg -> update(model, msg) }

@@ -59,8 +59,8 @@ object KelmTest : Spek({
 
         fun build(msgs: List<Msg>) = Kelm
             .build<Model, Msg, Cmd, Sub>(
-                Observable.fromIterable(msgs),
                 initModel = model,
+                msgInput = Observable.fromIterable(msgs),
                 cmdToMaybe = ::cmdToMaybe,
                 subToObservable = ::subToObservable,
                 subscriptions = { model, modelObs, msgObs -> subscriptions(model, modelObs, msgObs) },

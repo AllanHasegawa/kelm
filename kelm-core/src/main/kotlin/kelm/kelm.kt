@@ -92,28 +92,30 @@ class SubContext<SubT : Sub> internal constructor() {
 object Kelm {
     @Suppress("UNCHECKED_CAST")
     fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
-        msgObserver: Observable<MsgT>,
         initModel: ModelT,
+        msgInput: Observable<MsgT>,
         initCmd: CmdT? = null,
-        cmdToMaybe: (CmdT) -> Maybe<MsgT> = { Maybe.error(CmdFactoryNotImplementedException()) },
-        subToObservable: (SubT) -> Observable<MsgT> = { Observable.error(SubFactoryNotImplementedException()) },
         subscriptions: SubContext<SubT>.(
-            ModelT,
-            Observable<ModelT>,
-            Observable<MsgT>
+            model: ModelT,
+            modelObs: Observable<ModelT>,
+            msgObs: Observable<MsgT>
         ) -> Unit = { _, _, _ -> },
-        errorToMsg: (ExternalError) -> MsgT? = { null },
-        update: UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT
+        cmdToMaybe: (cmd: CmdT) -> Maybe<MsgT> = { Maybe.error(CmdFactoryNotImplementedException()) },
+        subToObservable: (sub: SubT) -> Observable<MsgT> = { Observable.error(SubFactoryNotImplementedException()) },
+        errorToMsg: (error: ExternalError) -> MsgT? = { null },
+        updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT) -> Disposable? = { _, _, _ -> null },
+        update: UpdateContext<CmdT>.(model: ModelT, msg: MsgT) -> ModelT
     ): Observable<ModelT> =
         Observable
-            .just(Unit)
-            .flatMap {
+            .defer {
                 val errorSubj = PublishSubject.create<MsgT>()
-                val modelSubj = BehaviorSubject.createDefault<ModelT>(initModel)
+                val modelSubj = BehaviorSubject.createDefault(initModel)
                 val msgSubj = BehaviorSubject.create<MsgT>()
 
                 val cmdDisposables = mutableMapOf<String, Disposable>()
                 val subDisposables = mutableMapOf<String, Disposable>()
+
+                val watcherDisposables = mutableListOf<Disposable>()
 
                 val initCmdOp = when (initCmd) {
                     null -> CmdOp.NoOp as CmdOp<CmdT>
@@ -123,13 +125,20 @@ object Kelm {
                 val updateContext = UpdateContext<CmdT>()
                 val subContext = SubContext<SubT>()
 
-                msgObserver
+                msgInput
                     .mergeWith(msgSubj)
                     .mergeWith(errorSubj)
                     .scan(
                         UpdatePrime(initModel, initCmdOp)
                     ) { acc, msg ->
                         updateContext.execute(update, acc.modelPrime, msg)
+                            .also { accPrime ->
+                                val maybeDisposable = updateWatcher(acc.modelPrime, msg, accPrime.modelPrime)
+                                if (maybeDisposable != null) {
+                                    watcherDisposables.add(maybeDisposable)
+                                }
+                                watcherDisposables.removeAll { it.isDisposed }
+                            }
                     }
                     .doOnNext { (modelPrime, _) -> modelSubj.onNext(modelPrime) }
                     .doOnNext { updatePrime ->
@@ -161,6 +170,7 @@ object Kelm {
                     }
                     .doOnNext { _ ->
                         cmdDisposables
+                            .toMap()
                             .filter { it.value.isDisposed }
                             .map { it.key }
                             .forEach { cmdDisposables.remove(it) }
@@ -203,6 +213,11 @@ object Kelm {
                     }
                     .skip(1)
                     .map { it.model!! }
+                    .doOnDispose {
+                        cmdDisposables.values.forEach(Disposable::dispose)
+                        subDisposables.values.forEach(Disposable::dispose)
+                        watcherDisposables.forEach(Disposable::dispose)
+                    }
             }
 }
 

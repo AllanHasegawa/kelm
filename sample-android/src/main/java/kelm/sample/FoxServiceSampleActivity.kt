@@ -39,7 +39,7 @@ class FoxServiceSampleActivity : AppCompatActivity() {
 
         modelDisposable = Kelm
             .build<Model, Msg, Cmd, Nothing>(
-                msgObserver = msgSubj,
+                msgInput = msgSubj,
                 initModel = FoxServiceContract.initModel(),
                 initCmd = FoxServiceContract.initCmd(),
                 update = { model, msg -> update(model, msg) },
