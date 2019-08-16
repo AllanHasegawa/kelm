@@ -7,6 +7,9 @@ import io.reactivex.subjects.BehaviorSubject
 import io.reactivex.subjects.PublishSubject
 import java.util.UUID
 
+
+typealias UpdateF<ModelT, MsgT, CmdT> = UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT
+
 abstract class Cmd(open val id: String = randomUuid()) {
     companion object {
         fun randomUuid(): String = UUID.randomUUID().toString()
@@ -36,7 +39,7 @@ class UpdateContext<CmdT : Cmd> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
 
     internal fun <ModelT, MsgT> execute(
-        f: UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT,
+        f: UpdateF<ModelT, MsgT, CmdT>,
         model: ModelT,
         msg: MsgT
     ): UpdatePrime<ModelT, CmdT> {
@@ -89,6 +92,14 @@ class SubContext<SubT : Sub> internal constructor() {
     }
 }
 
+data class Step<ModelT, MsgT, CmdT : Cmd>(
+    val model: ModelT,
+    val msg: MsgT,
+    val modelPrime: ModelT,
+    val cmdsStarted: List<CmdT> = emptyList(),
+    val cmdIdsCancelled: List<String> = emptyList()
+)
+
 object Kelm {
     @Suppress("UNCHECKED_CAST")
     fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
@@ -104,7 +115,7 @@ object Kelm {
         subToObservable: (sub: SubT) -> Observable<MsgT> = { Observable.error(SubFactoryNotImplementedException()) },
         errorToMsg: (error: ExternalError) -> MsgT? = { null },
         updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT) -> Disposable? = { _, _, _ -> null },
-        update: UpdateContext<CmdT>.(model: ModelT, msg: MsgT) -> ModelT
+        update: UpdateF<ModelT, MsgT, CmdT>
     ): Observable<ModelT> =
         Observable
             .defer {
@@ -219,6 +230,37 @@ object Kelm {
                         watcherDisposables.forEach(Disposable::dispose)
                     }
             }
+
+    fun <ModelT, MsgT, CmdT : Cmd> test(
+        update: UpdateF<ModelT, MsgT, CmdT>,
+        initModel: ModelT,
+        msgs: List<MsgT>
+    ): List<Step<ModelT, MsgT, CmdT>> {
+        val context = UpdateContext<CmdT>()
+        return Observable.fromIterable(msgs)
+            .scan(emptyList<Step<ModelT, MsgT, CmdT>>()) { acc, msg ->
+                val model = acc.lastOrNull()?.modelPrime ?: initModel
+                val updatePrime = context.execute(update, model, msg)
+                val modelPrime = updatePrime.modelPrime
+                val cmdOps = (updatePrime.cmdOp as CmdOp.MultiOps<CmdT>).ops
+                val cmdsStarted = cmdOps
+                    .mapNotNull { it as? CmdOp.Run<CmdT> }
+                    .map { it.cmd }
+                val cmdsCancelled = cmdOps
+                    .mapNotNull { it as? CmdOp.Cancel<CmdT> }
+                    .map { it.cmdId }
+                val step = Step(
+                    model = model,
+                    msg = msg,
+                    modelPrime = modelPrime,
+                    cmdsStarted = cmdsStarted,
+                    cmdIdsCancelled = cmdsCancelled
+                )
+                acc + step
+            }
+            .blockingLast()
+            .toList()
+    }
 }
 
 internal sealed class CmdOp<CmdT> {

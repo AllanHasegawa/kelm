@@ -4,18 +4,20 @@ import io.reactivex.schedulers.TestScheduler
 import io.reactivex.subjects.PublishSubject
 import kelm.CmdError
 import kelm.Kelm
+import kelm.Step
 import kelm.SubContext
 import kelm.SubscriptionError
 import kelm.UpdateContext
 import org.spekframework.spek2.Spek
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
+import kotlin.test.assertEquals
 
 object KelmTest : Spek({
     group("Given a simple contract and an initial model with sum of 0") {
         data class Model(val count: Int)
         data class Msg(val add: Int)
-        class Cmd(val throwError: Boolean) : kelm.Cmd()
+        data class Cmd(val throwError: Boolean) : kelm.Cmd()
         class Sub : kelm.Sub("the-sub")
 
         val cmdSubj = PublishSubject.create<Unit>()
@@ -30,6 +32,9 @@ object KelmTest : Spek({
                         runCmd(Cmd(throwError = it.count < 0))
                     }
                 }
+
+        fun runSteps(msgs: List<Msg>) =
+            Kelm.test<Model, Msg, Cmd>({ model, msg -> update(model, msg) }, Model(0), msgs)
 
         fun subToObservable(sub: Sub) =
             Observable
@@ -91,6 +96,13 @@ object KelmTest : Spek({
             test("the stream should not complete") {
                 testObs.assertNotComplete()
             }
+
+            test("the last step should sum up to 3") {
+                assertEquals(
+                    actual = runSteps(msgs).last(),
+                    expected = Step(Model(2), Msg(1), Model(3))
+                )
+            }
         }
 
         group("given a sequence of 5 addition msgs") {
@@ -104,6 +116,13 @@ object KelmTest : Spek({
                 cmdSubj.onNext(Unit)
                 testObs.assertValueSequence(listOf(0, 1, 2, 3, 4, 5, 15).map(::Model))
             }
+
+            test("the last step should sum up to 5 and CMD recorded") {
+                assertEquals(
+                    actual = runSteps(msgs).last(),
+                    expected = Step(Model(4), Msg(1), Model(5), listOf(Cmd(false)))
+                )
+            }
         }
 
         group("given a sequence of 5 negation msgs") {
@@ -116,6 +135,13 @@ object KelmTest : Spek({
             test("the cmd should be executed and throw an error terminating the stream") {
                 cmdSubj.onNext(Unit)
                 testObs.assertError { it is CmdError }
+            }
+
+            test("the last step should sum up to -5 and CMD recorded") {
+                assertEquals(
+                    actual = runSteps(msgs).last(),
+                    expected = Step(Model(-4), Msg(-1), Model(-5), listOf(Cmd(true)))
+                )
             }
         }
 
