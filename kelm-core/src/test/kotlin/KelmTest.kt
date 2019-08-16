@@ -26,12 +26,16 @@ object KelmTest : Spek({
         fun msgs(vararg v: Int) = v.map(::Msg)
 
         fun UpdateContext<Cmd>.update(model: Model, msg: Msg) =
-            model.copy(count = model.count + msg.add)
-                .also {
-                    if (it.count.absoluteValue == 5) {
-                        runCmd(Cmd(throwError = it.count < 0))
-                    }
-                }
+            when (msg.add) {
+                1001 -> null // Ignore when 'add' is 1001
+                else ->
+                    model.copy(count = model.count + msg.add)
+                        .also {
+                            if (it.count.absoluteValue == 5) {
+                                runCmd(Cmd(throwError = it.count < 0))
+                            }
+                        }
+            }
 
         fun runSteps(msgs: List<Msg>) =
             Kelm.test<Model, Msg, Cmd>({ model, msg -> update(model, msg) }, Model(0), msgs)
@@ -163,6 +167,25 @@ object KelmTest : Spek({
                 testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
                 testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
                 testObs.assertError { it is SubscriptionError }
+            }
+        }
+
+        group("given a sequence of 2 additions, 1 ignored msg, 1 addition") {
+            val msgs = msgs(1, 1, 1001, 2)
+
+            beforeEachTest {
+                testObs = build(msgs).test()
+            }
+
+            test("the ignored msg should not change the final result") {
+                testObs.assertValueSequence(listOf(0, 1, 2, 4).map(::Model))
+            }
+
+            test("the ignored msg should not change the steps") {
+                assertEquals(
+                    actual = runSteps(msgs).map { it.modelPrime?.count },
+                    expected = listOf(1, 2, null, 4)
+                )
             }
         }
     }

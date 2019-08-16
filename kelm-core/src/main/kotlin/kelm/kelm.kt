@@ -8,7 +8,7 @@ import io.reactivex.subjects.PublishSubject
 import java.util.UUID
 
 
-typealias UpdateF<ModelT, MsgT, CmdT> = UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT
+typealias UpdateF<ModelT, MsgT, CmdT> = UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT?
 
 abstract class Cmd(open val id: String = randomUuid()) {
     companion object {
@@ -45,7 +45,7 @@ class UpdateContext<CmdT : Cmd> internal constructor() {
     ): UpdatePrime<ModelT, CmdT> {
         clear()
         val modelPrime = f(this, model, msg)
-        return UpdatePrime(modelPrime, getCmdOps())
+        return UpdatePrime(model, modelPrime, getCmdOps())
     }
 
     operator fun CmdT.unaryPlus() {
@@ -95,7 +95,7 @@ class SubContext<SubT : Sub> internal constructor() {
 data class Step<ModelT, MsgT, CmdT : Cmd>(
     val model: ModelT,
     val msg: MsgT,
-    val modelPrime: ModelT,
+    val modelPrime: ModelT?,
     val cmdsStarted: List<CmdT> = emptyList(),
     val cmdIdsCancelled: List<String> = emptyList()
 )
@@ -114,13 +114,13 @@ object Kelm {
         cmdToMaybe: (cmd: CmdT) -> Maybe<MsgT> = { Maybe.error(CmdFactoryNotImplementedException()) },
         subToObservable: (sub: SubT) -> Observable<MsgT> = { Observable.error(SubFactoryNotImplementedException()) },
         errorToMsg: (error: ExternalError) -> MsgT? = { null },
-        updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT) -> Disposable? = { _, _, _ -> null },
+        updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT?) -> Disposable? = { _, _, _ -> null },
         update: UpdateF<ModelT, MsgT, CmdT>
     ): Observable<ModelT> =
         Observable
             .defer {
                 val errorSubj = PublishSubject.create<MsgT>()
-                val modelSubj = BehaviorSubject.createDefault(initModel)
+                val modelSubj = BehaviorSubject.createDefault<Optional<ModelT>>(initModel.toOptional())
                 val msgSubj = BehaviorSubject.create<MsgT>()
 
                 val cmdDisposables = mutableMapOf<String, Disposable>()
@@ -140,18 +140,19 @@ object Kelm {
                     .mergeWith(msgSubj)
                     .mergeWith(errorSubj)
                     .scan(
-                        UpdatePrime(initModel, initCmdOp)
+                        UpdatePrime(initModel, initModel, initCmdOp)
                     ) { acc, msg ->
-                        updateContext.execute(update, acc.modelPrime, msg)
+                        val currentModel = acc.modelPrime ?: acc.model
+                        updateContext.execute(update, currentModel, msg)
                             .also { accPrime ->
-                                val maybeDisposable = updateWatcher(acc.modelPrime, msg, accPrime.modelPrime)
+                                val maybeDisposable = updateWatcher(accPrime.model, msg, accPrime.modelPrime)
                                 if (maybeDisposable != null) {
                                     watcherDisposables.add(maybeDisposable)
                                 }
                                 watcherDisposables.removeAll { it.isDisposed }
                             }
                     }
-                    .doOnNext { (modelPrime, _) -> modelSubj.onNext(modelPrime) }
+                    .doOnNext { (modelPrime, _) -> modelSubj.onNext(modelPrime.toOptional()) }
                     .doOnNext { updatePrime ->
                         fun processCmdOp(cmdOp: CmdOp<CmdT>) {
                             when (cmdOp) {
@@ -186,12 +187,16 @@ object Kelm {
                             .map { it.key }
                             .forEach { cmdDisposables.remove(it) }
                     }
-                    .map { it.modelPrime }
+                    .filter { it.modelPrime != null }
+                    .map { it.modelPrime!! }
                     .scan(SubsState<ModelT, SubT>()) { subsState, model ->
                         val subsPrime = subContext.execute(
                             f = subscriptions,
                             model = model,
-                            modelObs = modelSubj.hide(),
+                            modelObs = modelSubj
+                                .filter { it is Some<*> }
+                                .map { it.toNullable()!! }
+                                .hide(),
                             msgObs = msgSubj.hide()
                         )
 
@@ -239,7 +244,11 @@ object Kelm {
         val context = UpdateContext<CmdT>()
         return Observable.fromIterable(msgs)
             .scan(emptyList<Step<ModelT, MsgT, CmdT>>()) { acc, msg ->
-                val model = acc.lastOrNull()?.modelPrime ?: initModel
+                val model =
+                    when (acc.isEmpty()) {
+                        true -> initModel
+                        false -> acc.last().run { modelPrime ?: model }
+                    }
                 val updatePrime = context.execute(update, model, msg)
                 val modelPrime = updatePrime.modelPrime
                 val cmdOps = (updatePrime.cmdOp as CmdOp.MultiOps<CmdT>).ops
@@ -277,7 +286,8 @@ internal sealed class CmdOp<CmdT> {
 }
 
 internal data class UpdatePrime<ModelT, CmdT>(
-    val modelPrime: ModelT,
+    val model: ModelT,
+    val modelPrime: ModelT?,
     val cmdOp: CmdOp<CmdT>
 )
 
@@ -299,13 +309,15 @@ private fun <SubT : Sub> computeSubsDiff(old: List<SubT>, new: List<SubT>): List
     val toCreateIds = newIdx.keys - oldIdx.keys
     val toDisposeIds = oldIdx.keys - newIdx.keys
 
-    val toCreate = toCreateIds
-        .map { id -> newIdx.getValue(id) }
-        .map { SubsDiffOp.Create(it) as SubsDiffOp<SubT> }
+    val toCreate: List<SubsDiffOp<SubT>> =
+        toCreateIds
+            .map { id -> newIdx.getValue(id) }
+            .map { SubsDiffOp.Create(it) }
 
-    val toDispose = toDisposeIds
-        .map { id -> oldIdx.getValue(id) }
-        .map { SubsDiffOp.Dispose(it) as SubsDiffOp<SubT> }
+    val toDispose: List<SubsDiffOp<SubT>> =
+        toDisposeIds
+            .map { id -> oldIdx.getValue(id) }
+            .map { SubsDiffOp.Dispose(it) }
 
     return toDispose + toCreate
 }
