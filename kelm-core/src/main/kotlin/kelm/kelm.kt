@@ -75,14 +75,12 @@ class SubContext<SubT : Sub> internal constructor() {
 
     private val subs = mutableListOf<SubT>()
 
-    internal fun <ModelT, MsgT> execute(
-        f: SubContext<SubT>.(ModelT, Observable<ModelT>, Observable<MsgT>) -> Unit,
-        model: ModelT,
-        modelObs: Observable<ModelT>,
-        msgObs: Observable<MsgT>
+    internal fun <ModelT> execute(
+        f: SubContext<SubT>.(ModelT) -> Unit,
+        model: ModelT
     ): List<SubT> {
         subs.clear()
-        f(this, model, modelObs, msgObs)
+        f(this, model)
 
         return subs.toList()
     }
@@ -106,13 +104,13 @@ object Kelm {
         initModel: ModelT,
         msgInput: Observable<MsgT>,
         initCmd: CmdT? = null,
-        subscriptions: SubContext<SubT>.(
-            model: ModelT,
-            modelObs: Observable<ModelT>,
-            msgObs: Observable<MsgT>
-        ) -> Unit = { _, _, _ -> },
+        subscriptions: SubContext<SubT>.(model: ModelT) -> Unit = { _ -> },
         cmdToMaybe: (cmd: CmdT) -> Maybe<MsgT> = { Maybe.error(CmdFactoryNotImplementedException()) },
-        subToObservable: (sub: SubT) -> Observable<MsgT> = { Observable.error(SubFactoryNotImplementedException()) },
+        subToObservable: (
+            sub: SubT,
+            msgObs: Observable<MsgT>,
+            modelObs: Observable<ModelT>
+        ) -> Observable<MsgT> = { _, _, _ -> Observable.error(SubFactoryNotImplementedException()) },
         errorToMsg: (error: ExternalError) -> MsgT? = { null },
         updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT?) -> Disposable? = { _, _, _ -> null },
         update: UpdateF<ModelT, MsgT, CmdT>
@@ -120,7 +118,8 @@ object Kelm {
         Observable
             .defer {
                 val errorSubj = PublishSubject.create<MsgT>()
-                val modelSubj = BehaviorSubject.createDefault<Optional<ModelT>>(initModel.toOptional())
+                val modelSubj =
+                    BehaviorSubject.createDefault<Optional<ModelT>>(initModel.toOptional())
                 val msgSubj = BehaviorSubject.create<MsgT>()
 
                 val cmdDisposables = mutableMapOf<String, Disposable>()
@@ -145,7 +144,8 @@ object Kelm {
                         val currentModel = acc.modelPrime ?: acc.model
                         updateContext.execute(update, currentModel, msg)
                             .also { accPrime ->
-                                val maybeDisposable = updateWatcher(accPrime.model, msg, accPrime.modelPrime)
+                                val maybeDisposable =
+                                    updateWatcher(accPrime.model, msg, accPrime.modelPrime)
                                 if (maybeDisposable != null) {
                                     watcherDisposables.add(maybeDisposable)
                                 }
@@ -192,22 +192,22 @@ object Kelm {
                     .scan(SubsState<ModelT, SubT>()) { subsState, model ->
                         val subsPrime = subContext.execute(
                             f = subscriptions,
-                            model = model,
-                            modelObs = modelSubj
-                                .filter { it is Some<*> }
-                                .map { it.toNullable()!! }
-                                .hide(),
-                            msgObs = msgSubj.hide()
+                            model = model
                         )
 
                         SubsState(model, subs = subsState.subsPrime, subsPrime = subsPrime)
                     }
                     .doOnNext { (_, subs, subsPrime) ->
                         val subsDiffs = computeSubsDiff(old = subs, new = subsPrime)
+                        val msgObs = msgSubj.hide()
+                        val modelObs = modelSubj.hide()
+                            .filter { it is Some<*> }
+                            .map { it.toNullable()!! }
+
                         subsDiffs.forEach { diff ->
                             when (diff) {
                                 is SubsDiffOp.Create ->
-                                    subToObservable(diff.sub)
+                                    subToObservable(diff.sub, msgObs, modelObs)
                                         .doOnNext(msgSubj::onNext)
                                         .doOnError { error ->
                                             SubscriptionError(diff.sub as Any, error)
@@ -219,7 +219,9 @@ object Kelm {
                                                 }
                                         }
                                         .subscribe({}, {}, {})
-                                        .let { disposable -> subDisposables[diff.sub.id] = disposable }
+                                        .let { disposable ->
+                                            subDisposables[diff.sub.id] = disposable
+                                        }
                                 is SubsDiffOp.Dispose -> {
                                     subDisposables[diff.sub.id]?.dispose()
                                     subDisposables.remove(diff.sub.id)

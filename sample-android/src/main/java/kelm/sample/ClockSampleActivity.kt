@@ -41,8 +41,8 @@ class ClockSampleActivity : AppCompatActivity() {
             .build<Model, Msg, Nothing, Sub>(
                 msgInput = msgSubj,
                 initModel = ClockContract.initModel(),
-                subscriptions = { model, _, _ -> subscriptions(model) },
-                subToObservable = { sub ->
+                subscriptions = { model -> subscriptions(model) },
+                subToObservable = { sub, _, _ ->
                     when (sub) {
                         is Sub.ClockTickSub -> clockTickGeneratorObs()
                     }
