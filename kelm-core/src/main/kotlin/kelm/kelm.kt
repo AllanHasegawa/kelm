@@ -199,7 +199,7 @@ object Kelm {
                     }
                     .doOnNext { (_, subs, subsPrime) ->
                         val subsDiffs = computeSubsDiff(old = subs, new = subsPrime)
-                        val msgObs = msgSubj.hide()
+                        val msgObs = msgInput.mergeWith(msgSubj).hide()
                         val modelObs = modelSubj.hide()
                             .filter { it is Some<*> }
                             .map { it.toNullable()!! }
