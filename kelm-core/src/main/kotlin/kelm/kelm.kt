@@ -64,6 +64,28 @@ class UpdateContext<CmdT : Cmd> internal constructor() {
         cmdOps.add(CmdOp.Run(cmd))
     }
 
+    fun <OtherModelT, OtherMsgT, OtherCmdT : Cmd> switchContext(
+        model: OtherModelT,
+        msg: OtherMsgT,
+        otherCmdToCmd: (OtherCmdT) -> CmdT? = { null },
+        update: UpdateF<OtherModelT, OtherMsgT, OtherCmdT>
+    ): OtherModelT? {
+        val context = UpdateContext<OtherCmdT>()
+        val modelPrime = update(context, model, msg)
+        val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
+            when (otherCmdOp) {
+                is CmdOp.Run -> {
+                    val newCmd = otherCmdToCmd(otherCmdOp.cmd)
+                        ?: return@mapNotNull null
+                    CmdOp.Run(newCmd)
+                }
+                else -> otherCmdOp
+            } as CmdOp<CmdT>
+        }
+        cmdOps.addAll(cmds)
+        return modelPrime
+    }
+
     private fun getCmdOps() = CmdOp.MultiOps(cmdOps.toList())
 
     private fun clear() {

@@ -40,7 +40,7 @@ object KelmTest : Spek({
         fun runSteps(msgs: List<Msg>) =
             Kelm.test<Model, Msg, Cmd>({ model, msg -> update(model, msg) }, Model(0), msgs)
 
-        fun subToObservable(sub: Sub) =
+        fun subToObservable(sub: Sub, msgObs: Observable<Msg>, modelObs: Observable<Model>) =
             Observable
                 .interval(1, TimeUnit.MINUTES, testScheduler)
                 .map { Msg(100) }
@@ -57,11 +57,7 @@ object KelmTest : Spek({
                     .toMaybe()
             }
 
-        fun SubContext<Sub>.subscriptions(
-            model: Model,
-            modelObs: Observable<Model>,
-            msgObs: Observable<Msg>
-        ) {
+        fun SubContext<Sub>.subscriptions(model: Model) {
             when (model.count) {
                 in 10..Int.MAX_VALUE ->
                     runSub(Sub())
@@ -76,7 +72,7 @@ object KelmTest : Spek({
                 msgInput = Observable.fromIterable(msgs),
                 cmdToMaybe = ::cmdToMaybe,
                 subToObservable = ::subToObservable,
-                subscriptions = { model, modelObs, msgObs -> subscriptions(model, modelObs, msgObs) },
+                subscriptions = { model -> subscriptions(model) },
                 update = { model, msg -> update(model, msg) }
             )
 
