@@ -35,7 +35,7 @@ data class SubscriptionError(val subscription: Any, override val cause: Throwabl
 data class CmdError(val cmd: Any, override val cause: Throwable) :
     ExternalError("The command [$cmd] threw an error", cause)
 
-class UpdateContext<CmdT : Cmd> internal constructor() {
+class UpdateContext<MsgT, CmdT : Cmd> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
 
     internal fun <ModelT, MsgT> execute(
