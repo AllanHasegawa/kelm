@@ -7,7 +7,6 @@ import io.reactivex.subjects.BehaviorSubject
 import io.reactivex.subjects.PublishSubject
 import java.util.UUID
 
-
 typealias UpdateF<ModelT, MsgT, CmdT> = UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT?
 
 abstract class Cmd(open val id: String = randomUuid()) {
@@ -141,8 +140,10 @@ object Kelm {
             .defer {
                 val errorSubj = PublishSubject.create<MsgT>()
                 val modelSubj =
-                    BehaviorSubject.createDefault<Optional<ModelT>>(initModel.toOptional())
-                val msgSubj = BehaviorSubject.create<MsgT>()
+                    BehaviorSubject
+                        .createDefault<Optional<ModelT>>(initModel.toOptional())
+                        .toSerialized()
+                val msgSubj = BehaviorSubject.create<MsgT>().toSerialized()
 
                 val cmdDisposables = mutableMapOf<String, Disposable>()
                 val subDisposables = mutableMapOf<String, Disposable>()
@@ -158,6 +159,7 @@ object Kelm {
                 val subContext = SubContext<SubT>()
 
                 msgInput
+                    .serialize()
                     .mergeWith(msgSubj)
                     .mergeWith(errorSubj)
                     .scan(
