@@ -5,6 +5,7 @@ import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.BehaviorSubject
 import io.reactivex.subjects.PublishSubject
+import io.reactivex.subjects.ReplaySubject
 import java.util.UUID
 
 typealias UpdateF<ModelT, MsgT, CmdT> = UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT?
@@ -143,7 +144,7 @@ object Kelm {
                     BehaviorSubject
                         .createDefault<Optional<ModelT>>(initModel.toOptional())
                         .toSerialized()
-                val msgSubj = BehaviorSubject.create<MsgT>().toSerialized()
+                val msgSubj = ReplaySubject.create<MsgT>().toSerialized()
 
                 val cmdDisposables = mutableMapOf<String, Disposable>()
                 val subDisposables = mutableMapOf<String, Disposable>()
@@ -202,14 +203,18 @@ object Kelm {
                             }
                         }
 
-                        processCmdOp(updatePrime.cmdOp)
+                        synchronized(cmdDisposables) {
+                            processCmdOp(updatePrime.cmdOp)
+                        }
                     }
                     .doOnNext { _ ->
-                        cmdDisposables
-                            .toMap()
-                            .filter { it.value.isDisposed }
-                            .map { it.key }
-                            .forEach { cmdDisposables.remove(it) }
+                        synchronized(cmdDisposables) {
+                            cmdDisposables
+                                .toMap()
+                                .filter { it.value.isDisposed }
+                                .map { it.key }
+                                .forEach { cmdDisposables.remove(it) }
+                        }
                     }
                     .filter { it.modelPrime != null }
                     .map { it.modelPrime!! }
@@ -244,11 +249,15 @@ object Kelm {
                                         }
                                         .subscribe({}, {}, {})
                                         .let { disposable ->
-                                            subDisposables[diff.sub.id] = disposable
+                                            synchronized(subDisposables) {
+                                                subDisposables[diff.sub.id] = disposable
+                                            }
                                         }
                                 is SubsDiffOp.Dispose -> {
-                                    subDisposables[diff.sub.id]?.dispose()
-                                    subDisposables.remove(diff.sub.id)
+                                    synchronized(subDisposables) {
+                                        subDisposables[diff.sub.id]?.dispose()
+                                        subDisposables.remove(diff.sub.id)
+                                    }
                                 }
                             }
                         }
