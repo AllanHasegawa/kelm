@@ -3,17 +3,32 @@ package kelm
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 
-abstract class KelmSimple<ModelT, MsgT> {
-    abstract fun initModel(): ModelT
-    abstract fun update(model: ModelT, msg: MsgT): ModelT?
-    abstract fun errorToMsg(error: ExternalError): MsgT?
+object Kelm2 {
+    abstract class Simple<ModelT, MsgT> {
+        abstract fun initModel(): ModelT
+        abstract fun update(model: ModelT, msg: MsgT): ModelT?
+        abstract fun errorToMsg(error: ExternalError): MsgT?
 
-    fun updateWatcher(model: ModelT, msg: MsgT, modelPrime: ModelT?): Disposable? =
-        null
+        fun updateWatcher(model: ModelT, msg: MsgT, modelPrime: ModelT?): Disposable? =
+            null
+    }
+
+    object MyCmd : Cmd()
+    abstract class Program<ModelT, MsgT, CmdT : Cmd> {
+        abstract fun initModel(): ModelT
+        abstract fun UpdateContext<MsgT, CmdT>.update(model: ModelT, msg: MsgT): ModelT?
+        abstract fun errorToMsg(error: ExternalError): MsgT?
+
+        fun updateWatcher(model: ModelT, msg: MsgT, modelPrime: ModelT?): Disposable? =
+            null
+
+        internal infix fun ModelT.withCmd(cmd: CmdT): UpdatePrime<ModelT, CmdT> =
+            UpdatePrime<ModelT, CmdT>(this, null, CmdOp.Run(cmd))
+    }
 }
 
 fun <ModelT, MsgT> doKelm(
-    obj: KelmSimple<ModelT, MsgT>,
+    obj: Kelm2.Simple<ModelT, MsgT>,
     msgInput: Observable<MsgT>
 ): Observable<ModelT> =
     Kelm.build<ModelT, MsgT, Nothing, Nothing>(
@@ -25,13 +40,3 @@ fun <ModelT, MsgT> doKelm(
             with(obj) { update(model, msg) }
         }
     )
-
-fun <ModelT, MsgT> steps(
-    obj: KelmSimple<ModelT, MsgT>,
-    vararg msgs: MsgT
-) = Kelm.test<ModelT, MsgT, Nothing>(
-    update = { model, msg ->
-        with(obj) { update(model, msg) }
-    }, initModel = obj.initModel(),
-    msgs = msgs.toList()
-)

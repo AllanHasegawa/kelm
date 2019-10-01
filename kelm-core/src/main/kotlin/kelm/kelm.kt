@@ -8,7 +8,8 @@ import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.ReplaySubject
 import java.util.UUID
 
-typealias UpdateF<ModelT, MsgT, CmdT> = UpdateContext<CmdT>.(ModelT, MsgT) -> ModelT?
+typealias UpdateF<ModelT, MsgT, CmdT> =
+        UpdateContext<ModelT, MsgT, CmdT>.(ModelT, MsgT) -> ModelT?
 
 abstract class Cmd(open val id: String = randomUuid()) {
     companion object {
@@ -20,25 +21,10 @@ abstract class Sub(open val id: String) {
     companion object
 }
 
-class CmdFactoryNotImplementedException :
-    RuntimeException("Cmd factory not implemented")
-
-class SubFactoryNotImplementedException :
-    RuntimeException("Subscription factory not implemented")
-
-sealed class ExternalError(message: String, cause: Throwable) :
-    RuntimeException(message, cause)
-
-data class SubscriptionError(val subscription: Any, override val cause: Throwable) :
-    ExternalError("The subscription [$subscription] threw an error", cause)
-
-data class CmdError(val cmd: Any, override val cause: Throwable) :
-    ExternalError("The command [$cmd] threw an error", cause)
-
-class UpdateContext<CmdT : Cmd> internal constructor() {
+class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
 
-    internal fun <ModelT, MsgT> execute(
+    internal fun execute(
         f: UpdateF<ModelT, MsgT, CmdT>,
         model: ModelT,
         msg: MsgT
@@ -70,7 +56,7 @@ class UpdateContext<CmdT : Cmd> internal constructor() {
         otherCmdToCmd: (OtherCmdT) -> CmdT? = { null },
         update: UpdateF<OtherModelT, OtherMsgT, OtherCmdT>
     ): OtherModelT? {
-        val context = UpdateContext<OtherCmdT>()
+        val context = UpdateContext<OtherMsgT, OtherCmdT>()
         val modelPrime = update(context, model, msg)
         val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
             when (otherCmdOp) {
@@ -156,7 +142,7 @@ object Kelm {
                     else -> CmdOp.Run(initCmd)
                 }
 
-                val updateContext = UpdateContext<CmdT>()
+                val updateContext = UpdateContext<MsgT, CmdT>()
                 val subContext = SubContext<SubT>()
 
                 msgInput
@@ -276,7 +262,7 @@ object Kelm {
         initModel: ModelT,
         msgs: List<MsgT>
     ): List<Step<ModelT, MsgT, CmdT>> {
-        val context = UpdateContext<CmdT>()
+        val context = UpdateContext<MsgT, CmdT>()
         return Observable.fromIterable(msgs)
             .scan(emptyList<Step<ModelT, MsgT, CmdT>>()) { acc, msg ->
                 val model =
