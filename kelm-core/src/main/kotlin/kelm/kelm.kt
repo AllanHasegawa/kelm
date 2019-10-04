@@ -56,7 +56,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
         otherCmdToCmd: (OtherCmdT) -> CmdT? = { null },
         update: UpdateF<OtherModelT, OtherMsgT, OtherCmdT>
     ): OtherModelT? {
-        val context = UpdateContext<OtherMsgT, OtherCmdT>()
+        val context = UpdateContext<OtherModelT, OtherMsgT, OtherCmdT>()
         val modelPrime = update(context, model, msg)
         val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
             when (otherCmdOp) {
@@ -72,7 +72,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
         return modelPrime
     }
 
-    private fun getCmdOps() = CmdOp.MultiOps(cmdOps.toList())
+    private fun getCmdOps() = cmdOps.toList()
 
     private fun clear() {
         cmdOps.clear()
@@ -98,12 +98,13 @@ class SubContext<SubT : Sub> internal constructor() {
     }
 }
 
-data class Step<ModelT, MsgT, CmdT : Cmd>(
+data class Step<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
     val model: ModelT,
     val msg: MsgT,
     val modelPrime: ModelT?,
     val cmdsStarted: List<CmdT> = emptyList(),
-    val cmdIdsCancelled: List<String> = emptyList()
+    val cmdIdsCancelled: List<String> = emptyList(),
+    val subs: List<SubT> = emptyList()
 )
 
 object Kelm {
@@ -138,11 +139,11 @@ object Kelm {
                 val watcherDisposables = mutableListOf<Disposable>()
 
                 val initCmdOp = when (initCmd) {
-                    null -> CmdOp.NoOp as CmdOp<CmdT>
+                    null -> null
                     else -> CmdOp.Run(initCmd)
-                }
+                }.let(::listOfNotNull)
 
-                val updateContext = UpdateContext<MsgT, CmdT>()
+                val updateContext = UpdateContext<ModelT, MsgT, CmdT>()
                 val subContext = SubContext<SubT>()
 
                 msgInput
@@ -167,8 +168,6 @@ object Kelm {
                     .doOnNext { updatePrime ->
                         fun processCmdOp(cmdOp: CmdOp<CmdT>) {
                             when (cmdOp) {
-                                is CmdOp.NoOp -> Unit
-                                is CmdOp.MultiOps -> cmdOp.ops.forEach(::processCmdOp)
                                 is CmdOp.Cancel -> cmdDisposables[cmdOp.cmdId]?.dispose()
                                 is CmdOp.Run -> {
                                     cmdDisposables[cmdOp.cmd.id]?.dispose()
@@ -190,7 +189,7 @@ object Kelm {
                         }
 
                         synchronized(cmdDisposables) {
-                            processCmdOp(updatePrime.cmdOp)
+                            updatePrime.cmdOps.forEach(::processCmdOp)
                         }
                     }
                     .doOnNext { _ ->
@@ -257,14 +256,14 @@ object Kelm {
                     }
             }
 
-    fun <ModelT, MsgT, CmdT : Cmd> test(
+    fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> test(
         update: UpdateF<ModelT, MsgT, CmdT>,
         initModel: ModelT,
         msgs: List<MsgT>
-    ): List<Step<ModelT, MsgT, CmdT>> {
-        val context = UpdateContext<MsgT, CmdT>()
+    ): List<Step<ModelT, MsgT, CmdT, SubT>> {
+        val context = UpdateContext<ModelT, MsgT, CmdT>()
         return Observable.fromIterable(msgs)
-            .scan(emptyList<Step<ModelT, MsgT, CmdT>>()) { acc, msg ->
+            .scan(emptyList<Step<ModelT, MsgT, CmdT, SubT>>()) { acc, msg ->
                 val model =
                     when (acc.isEmpty()) {
                         true -> initModel
@@ -272,11 +271,10 @@ object Kelm {
                     }
                 val updatePrime = context.execute(update, model, msg)
                 val modelPrime = updatePrime.modelPrime
-                val cmdOps = (updatePrime.cmdOp as CmdOp.MultiOps<CmdT>).ops
-                val cmdsStarted = cmdOps
+                val cmdsStarted = updatePrime.cmdOps
                     .mapNotNull { it as? CmdOp.Run<CmdT> }
                     .map { it.cmd }
-                val cmdsCancelled = cmdOps
+                val cmdsCancelled = updatePrime.cmdOps
                     .mapNotNull { it as? CmdOp.Cancel<CmdT> }
                     .map { it.cmdId }
                 val step = Step(
@@ -284,7 +282,8 @@ object Kelm {
                     msg = msg,
                     modelPrime = modelPrime,
                     cmdsStarted = cmdsStarted,
-                    cmdIdsCancelled = cmdsCancelled
+                    cmdIdsCancelled = cmdsCancelled,
+                    subs = emptyList<SubT>() // TODO Add subs to Step
                 )
                 acc + step
             }
@@ -294,22 +293,14 @@ object Kelm {
 }
 
 internal sealed class CmdOp<CmdT> {
-    object NoOp : CmdOp<Nothing>()
     data class Run<CmdT>(val cmd: CmdT) : CmdOp<CmdT>()
     data class Cancel<CmdT>(val cmdId: String) : CmdOp<CmdT>()
-    data class MultiOps<CmdT>(val ops: List<CmdOp<CmdT>>) : CmdOp<CmdT>() {
-        init {
-            require(ops.firstOrNull { it is MultiOps || it is NoOp } == null) {
-                "CmdOp::MultiOps must not have any CmdOp::MultiOps or CmdOp::NoOp inside"
-            }
-        }
-    }
 }
 
 internal data class UpdatePrime<ModelT, CmdT>(
     val model: ModelT,
     val modelPrime: ModelT?,
-    val cmdOp: CmdOp<CmdT>
+    val cmdOps: List<CmdOp<CmdT>>
 )
 
 private data class SubsState<ModelT, SubT>(
