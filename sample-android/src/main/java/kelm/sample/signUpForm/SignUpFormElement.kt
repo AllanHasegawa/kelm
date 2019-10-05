@@ -1,6 +1,6 @@
 package kelm.sample.signUpForm
 
-object SignUpFormContract {
+object SignUpFormElement {
     enum class EmailError {
         Required,
         Validation

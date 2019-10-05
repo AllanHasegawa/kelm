@@ -8,8 +8,8 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import kelm.sample.R
 import kelm.sample.SimpleTextWatcher
-import kelm.sample.signUpForm.SignUpFormContract.Model
-import kelm.sample.signUpForm.SignUpFormContract.Msg
+import kelm.sample.signUpForm.SignUpFormElement.Model
+import kelm.sample.signUpForm.SignUpFormElement.Msg
 import kotlinx.android.synthetic.main.activity_sign_up_form_sample.*
 import kotlinx.android.synthetic.main.layout_sign_up_form.*
 import kotlinx.android.synthetic.main.layout_sign_up_form_registering_device.*
@@ -92,15 +92,15 @@ class SignUpFormSampleActivity : AppCompatActivity() {
 
         formEmailEt.updateEditTextIfNeeded(email, inputEnabled)
         formEmailEt.error = when (emailError) {
-            SignUpFormContract.EmailError.Required -> "Email is required"
-            SignUpFormContract.EmailError.Validation -> "Email is not valid"
+            SignUpFormElement.EmailError.Required -> "Email is required"
+            SignUpFormElement.EmailError.Validation -> "Email is not valid"
             null -> null
         }
 
         formPasswordEt.updateEditTextIfNeeded(password, inputEnabled)
         formPasswordEt.error = when (passwordError) {
-            SignUpFormContract.PasswordError.Required -> "Password is required"
-            SignUpFormContract.PasswordError.TooSimple -> "Passwords must be more than 6 letters"
+            SignUpFormElement.PasswordError.Required -> "Password is required"
+            SignUpFormElement.PasswordError.TooSimple -> "Passwords must be more than 6 letters"
             null -> null
         }
 

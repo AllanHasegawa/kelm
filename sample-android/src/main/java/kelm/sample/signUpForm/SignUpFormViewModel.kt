@@ -9,11 +9,11 @@ import io.reactivex.subjects.PublishSubject
 import kelm.Kelm
 import kelm.UpdateContext
 import kelm.sample.isEmailValid
-import kelm.sample.signUpForm.SignUpFormContract.Cmd
-import kelm.sample.signUpForm.SignUpFormContract.EmailError
-import kelm.sample.signUpForm.SignUpFormContract.Model
-import kelm.sample.signUpForm.SignUpFormContract.Msg
-import kelm.sample.signUpForm.SignUpFormContract.PasswordError
+import kelm.sample.signUpForm.SignUpFormElement.Cmd
+import kelm.sample.signUpForm.SignUpFormElement.EmailError
+import kelm.sample.signUpForm.SignUpFormElement.Model
+import kelm.sample.signUpForm.SignUpFormElement.Msg
+import kelm.sample.signUpForm.SignUpFormElement.PasswordError
 import java.util.UUID
 
 class SignUpFormViewModel : ViewModel() {
@@ -42,7 +42,7 @@ class SignUpFormViewModel : ViewModel() {
         streamDisposable.dispose()
     }
 
-    private fun UpdateContext<Cmd>.update(model: Model, msg: Msg) =
+    private fun UpdateContext<Model, Msg, Cmd>.update(model: Model, msg: Msg) =
         when (model) {
             is Model.FormVisible -> handleFormVisibleUpdate(model, msg)
             is Model.RegisteringDevice -> handleRegisteringDeviceUpdate(model, msg)
@@ -51,7 +51,7 @@ class SignUpFormViewModel : ViewModel() {
             is Model.PetScreen -> model
         }
 
-    private fun UpdateContext<Cmd>.handleFormVisibleUpdate(model: Model.FormVisible, msg: Msg) = with(model) {
+    private fun UpdateContext<Model, Msg, Cmd>.handleFormVisibleUpdate(model: Model.FormVisible, msg: Msg) = with(model) {
         when (msg) {
             is Msg.EmailChanged -> copy(email = msg.email, emailError = null)
             is Msg.PasswordChanged -> copy(password = msg.password, passwordError = null)
@@ -109,7 +109,7 @@ class SignUpFormViewModel : ViewModel() {
         }
     }
 
-    private fun UpdateContext<Cmd>.handleRegisteringDeviceUpdate(
+    private fun UpdateContext<Model, Msg, Cmd>.handleRegisteringDeviceUpdate(
         model: Model.RegisteringDevice,
         msg: Msg
     ) = with(model) {

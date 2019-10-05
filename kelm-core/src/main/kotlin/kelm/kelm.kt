@@ -107,7 +107,73 @@ data class Step<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
     val subs: List<SubT> = emptyList()
 )
 
+sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
+    data class Step<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        val model: ModelT,
+        val msg: MsgT,
+        val modelPrime: ModelT?,
+        val cmdsStarted: List<CmdT> = emptyList(),
+        val cmdIdsCancelled: List<String> = emptyList(),
+        val subs: List<SubT> = emptyList()
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class SubscriptionStarted(val sub: Sub)
+    data class SubscriptionStopped(val sub: Sub)
+    data class SubscriptionEmission<MsgT>(val msg: MsgT)
+    data class CmdStarted(val cmd: Cmd)
+    data class CmdStopped(val cmdId: String)
+    data class CmdEmission<MsgT>(val msg: MsgT)
+    data class CmdIdNotFoundToStop(val cmdId: String)
+}
+
 object Kelm {
+    abstract class Sandbox<ModelT, MsgT> : Element<ModelT, MsgT, Nothing, Nothing>() {
+        abstract fun updateSimple(model: ModelT, msg: MsgT): ModelT?
+
+        final override fun UpdateContext<ModelT, MsgT, Nothing>.update(
+            model: ModelT,
+            msg: MsgT
+        ): ModelT? = updateSimple(model, msg)
+
+        fun start(msgInput: Observable<MsgT>) =
+            start(
+                msgInput = msgInput,
+                cmdToMaybe = { Maybe.empty() },
+                subToObs = { _, _, _ -> Observable.empty() }
+            )
+
+        final override fun errorToMsg(error: ExternalError): MsgT? = null
+        final override fun initCmds(): List<Nothing>? = null
+        final override fun SubContext<Nothing>.subscriptions(model: ModelT) = Unit
+    }
+
+    abstract class Element<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
+        abstract fun initModel(): ModelT
+        open fun initCmds(): List<CmdT>? = null
+
+        abstract fun UpdateContext<ModelT, MsgT, CmdT>.update(model: ModelT, msg: MsgT): ModelT?
+        abstract fun SubContext<SubT>.subscriptions(model: ModelT)
+        abstract fun errorToMsg(error: ExternalError): MsgT?
+
+        open fun updateWatcher(step: Step<ModelT, MsgT, CmdT, SubT>): Disposable? = null
+
+        fun start(
+            msgInput: Observable<MsgT>,
+            cmdToMaybe: (CmdT) -> Maybe<MsgT>,
+            subToObs: (SubT, Observable<MsgT>, Observable<ModelT>) -> Observable<MsgT>
+        ) =
+            Kelm.build(
+                initModel = initModel(),
+                msgInput = msgInput,
+                cmdToMaybe = cmdToMaybe,
+                subToObservable = subToObs,
+                errorToMsg = ::errorToMsg,
+                subscriptions = { model -> this.subscriptions(model) },
+//        updateWatcher = obj::updateWatcher,
+                update = { model, msg -> update(model, msg) }
+            )
+    }
+
     @Suppress("UNCHECKED_CAST")
     fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         initModel: ModelT,
@@ -121,7 +187,7 @@ object Kelm {
             modelObs: Observable<ModelT>
         ) -> Observable<MsgT> = { _, _, _ -> Observable.error(SubFactoryNotImplementedException()) },
         errorToMsg: (error: ExternalError) -> MsgT? = { null },
-        updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT?) -> Disposable? = { _, _, _ -> null },
+//        updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT?) -> Disposable? = { _, _, _ -> null },
         update: UpdateF<ModelT, MsgT, CmdT>
     ): Observable<ModelT> =
         Observable
@@ -156,12 +222,12 @@ object Kelm {
                         val currentModel = acc.modelPrime ?: acc.model
                         updateContext.execute(update, currentModel, msg)
                             .also { accPrime ->
-                                val maybeDisposable =
-                                    updateWatcher(accPrime.model, msg, accPrime.modelPrime)
-                                if (maybeDisposable != null) {
-                                    watcherDisposables.add(maybeDisposable)
-                                }
-                                watcherDisposables.removeAll { it.isDisposed }
+                                //                                val maybeDisposable = // TODO restore watcher
+//                                    updateWatcher(accPrime.model, msg, accPrime.modelPrime)
+//                                if (maybeDisposable != null) {
+//                                    watcherDisposables.add(maybeDisposable)
+//                                }
+//                                watcherDisposables.removeAll { it.isDisposed }
                             }
                     }
                     .doOnNext { (modelPrime, _) -> modelSubj.onNext(modelPrime.toOptional()) }

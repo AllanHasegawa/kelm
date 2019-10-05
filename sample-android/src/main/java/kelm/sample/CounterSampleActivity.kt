@@ -5,9 +5,7 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
-import kelm.Kelm
-import kelm.sample.CounterContract.Model
-import kelm.sample.CounterContract.Msg
+import kelm.sample.CounterElement.Msg
 import kotlinx.android.synthetic.main.activity_counter_sample.*
 
 class CounterSampleActivity : AppCompatActivity() {
@@ -27,18 +25,8 @@ class CounterSampleActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
 
-        stateDisposable = Kelm
-            .build<Model, Msg, Nothing, Nothing>(
-                msgInput = msgSubj,
-                initModel = CounterContract.initModel(),
-                update = { model, msg ->
-                    when (msg) {
-                        is Msg.MinusClick -> model.copy(count = model.count - 1)
-                        is Msg.PlusClick -> model.copy(count = model.count + 1)
-                        is Msg.ResetClick -> model.copy(count = 0)
-                    }
-                }
-            )
+        stateDisposable = CounterElement
+            .start(msgInput = msgSubj)
             .subscribe { state ->
                 counterTv.text = state.count.toString()
                 counterMinusBt.isEnabled = state.minusBtEnabled
