@@ -3,13 +3,16 @@ package kelm
 import io.reactivex.Maybe
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
-import io.reactivex.subjects.BehaviorSubject
-import io.reactivex.subjects.PublishSubject
-import io.reactivex.subjects.ReplaySubject
+import kelm.internal.CmdOp
+import kelm.internal.UpdatePrime
+import kelm.internal.build
 import java.util.UUID
 
 typealias UpdateF<ModelT, MsgT, CmdT> =
         UpdateContext<ModelT, MsgT, CmdT>.(ModelT, MsgT) -> ModelT?
+
+typealias LoggerF<ModelT, MsgT, CmdT, SubT> =
+            (Log<ModelT, MsgT, CmdT, SubT>) -> Disposable?
 
 abstract class Cmd(open val id: String = randomUuid()) {
     companion object {
@@ -28,10 +31,10 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
         f: UpdateF<ModelT, MsgT, CmdT>,
         model: ModelT,
         msg: MsgT
-    ): UpdatePrime<ModelT, CmdT> {
+    ): UpdatePrime<ModelT, MsgT, CmdT> {
         clear()
         val modelPrime = f(this, model, msg)
-        return UpdatePrime(model, modelPrime, getCmdOps())
+        return UpdatePrime(model, msg, modelPrime, getCmdOps())
     }
 
     operator fun CmdT.unaryPlus() {
@@ -58,6 +61,8 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
     ): OtherModelT? {
         val context = UpdateContext<OtherModelT, OtherMsgT, OtherCmdT>()
         val modelPrime = update(context, model, msg)
+
+        @Suppress("UNCHECKED_CAST")
         val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
             when (otherCmdOp) {
                 is CmdOp.Run -> {
@@ -108,22 +113,51 @@ data class Step<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
 )
 
 sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
-    data class Step<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+    data class Update<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
         val model: ModelT,
-        val msg: MsgT,
+        val msg: MsgT?,
         val modelPrime: ModelT?,
         val cmdsStarted: List<CmdT> = emptyList(),
         val cmdIdsCancelled: List<String> = emptyList(),
         val subs: List<SubT> = emptyList()
     ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class SubscriptionStarted(val sub: Sub)
-    data class SubscriptionStopped(val sub: Sub)
-    data class SubscriptionEmission<MsgT>(val msg: MsgT)
-    data class CmdStarted(val cmd: Cmd)
-    data class CmdStopped(val cmdId: String)
-    data class CmdEmission<MsgT>(val msg: MsgT)
-    data class CmdIdNotFoundToStop(val cmdId: String)
+    data class SubscriptionSubscribed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class SubscriptionDisposed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class SubscriptionCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class SubscriptionError<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        val sub: Sub,
+        val error: Throwable
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class SubscriptionEmission<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        val sub: SubT,
+        val msg: MsgT
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class CmdSubscribed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class CmdDisposed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class CmdCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmdId: String) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class CmdEmission<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd, val msg: MsgT) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class CmdError<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd, val error: Throwable) :
+        Log<ModelT, MsgT, CmdT, SubT>()
+
+    data class CmdIdNotFoundToCancel<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmdId: String) :
+        Log<ModelT, MsgT, CmdT, SubT>()
 }
 
 object Kelm {
@@ -135,11 +169,15 @@ object Kelm {
             msg: MsgT
         ): ModelT? = updateSimple(model, msg)
 
-        fun start(msgInput: Observable<MsgT>) =
+        fun start(
+            msgInput: Observable<MsgT>,
+            logger: LoggerF<ModelT, MsgT, Nothing, Nothing> = { null }
+        ) =
             start(
                 msgInput = msgInput,
                 cmdToMaybe = { Maybe.empty() },
-                subToObs = { _, _, _ -> Observable.empty() }
+                subToObs = { _, _, _ -> Observable.empty() },
+                logger = logger
             )
 
         final override fun errorToMsg(error: ExternalError): MsgT? = null
@@ -155,247 +193,22 @@ object Kelm {
         abstract fun SubContext<SubT>.subscriptions(model: ModelT)
         abstract fun errorToMsg(error: ExternalError): MsgT?
 
-        open fun updateWatcher(step: Step<ModelT, MsgT, CmdT, SubT>): Disposable? = null
-
         fun start(
             msgInput: Observable<MsgT>,
             cmdToMaybe: (CmdT) -> Maybe<MsgT>,
-            subToObs: (SubT, Observable<MsgT>, Observable<ModelT>) -> Observable<MsgT>
+            subToObs: (SubT, Observable<MsgT>, Observable<ModelT>) -> Observable<MsgT>,
+            logger: LoggerF<ModelT, MsgT, CmdT, SubT> = { null }
         ) =
-            Kelm.build(
+            build(
                 initModel = initModel(),
+                initCmds = initCmds(),
                 msgInput = msgInput,
                 cmdToMaybe = cmdToMaybe,
                 subToObservable = subToObs,
                 errorToMsg = ::errorToMsg,
                 subscriptions = { model -> this.subscriptions(model) },
-//        updateWatcher = obj::updateWatcher,
-                update = { model, msg -> update(model, msg) }
+                logger = logger,
+                update = { model: ModelT, msg: MsgT -> update(model, msg) }
             )
     }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
-        initModel: ModelT,
-        msgInput: Observable<MsgT>,
-        initCmd: CmdT? = null,
-        subscriptions: SubContext<SubT>.(model: ModelT) -> Unit = { _ -> },
-        cmdToMaybe: (cmd: CmdT) -> Maybe<MsgT> = { Maybe.error(CmdFactoryNotImplementedException()) },
-        subToObservable: (
-            sub: SubT,
-            msgObs: Observable<MsgT>,
-            modelObs: Observable<ModelT>
-        ) -> Observable<MsgT> = { _, _, _ -> Observable.error(SubFactoryNotImplementedException()) },
-        errorToMsg: (error: ExternalError) -> MsgT? = { null },
-//        updateWatcher: (model: ModelT, msg: MsgT, modelPrime: ModelT?) -> Disposable? = { _, _, _ -> null },
-        update: UpdateF<ModelT, MsgT, CmdT>
-    ): Observable<ModelT> =
-        Observable
-            .defer {
-                val errorSubj = PublishSubject.create<MsgT>()
-                val modelSubj =
-                    BehaviorSubject
-                        .createDefault<Optional<ModelT>>(initModel.toOptional())
-                        .toSerialized()
-                val msgSubj = ReplaySubject.create<MsgT>().toSerialized()
-
-                val cmdDisposables = mutableMapOf<String, Disposable>()
-                val subDisposables = mutableMapOf<String, Disposable>()
-
-                val watcherDisposables = mutableListOf<Disposable>()
-
-                val initCmdOp = when (initCmd) {
-                    null -> null
-                    else -> CmdOp.Run(initCmd)
-                }.let(::listOfNotNull)
-
-                val updateContext = UpdateContext<ModelT, MsgT, CmdT>()
-                val subContext = SubContext<SubT>()
-
-                msgInput
-                    .serialize()
-                    .mergeWith(msgSubj)
-                    .mergeWith(errorSubj)
-                    .scan(
-                        UpdatePrime(initModel, initModel, initCmdOp)
-                    ) { acc, msg ->
-                        val currentModel = acc.modelPrime ?: acc.model
-                        updateContext.execute(update, currentModel, msg)
-                            .also { accPrime ->
-                                //                                val maybeDisposable = // TODO restore watcher
-//                                    updateWatcher(accPrime.model, msg, accPrime.modelPrime)
-//                                if (maybeDisposable != null) {
-//                                    watcherDisposables.add(maybeDisposable)
-//                                }
-//                                watcherDisposables.removeAll { it.isDisposed }
-                            }
-                    }
-                    .doOnNext { (modelPrime, _) -> modelSubj.onNext(modelPrime.toOptional()) }
-                    .doOnNext { updatePrime ->
-                        fun processCmdOp(cmdOp: CmdOp<CmdT>) {
-                            when (cmdOp) {
-                                is CmdOp.Cancel -> cmdDisposables[cmdOp.cmdId]?.dispose()
-                                is CmdOp.Run -> {
-                                    cmdDisposables[cmdOp.cmd.id]?.dispose()
-                                    cmdDisposables[cmdOp.cmd.id] =
-                                        cmdToMaybe(cmdOp.cmd)
-                                            .doOnSuccess(msgSubj::onNext)
-                                            .doOnError { error: Throwable ->
-                                                CmdError(cmdOp.cmd as Any, error)
-                                                    .let { cmdError ->
-                                                        when (val msg = errorToMsg(cmdError)) {
-                                                            null -> errorSubj.onError(cmdError)
-                                                            else -> msgSubj.onNext(msg)
-                                                        }
-                                                    }
-                                            }
-                                            .subscribe({}, {})
-                                }
-                            }
-                        }
-
-                        synchronized(cmdDisposables) {
-                            updatePrime.cmdOps.forEach(::processCmdOp)
-                        }
-                    }
-                    .doOnNext { _ ->
-                        synchronized(cmdDisposables) {
-                            cmdDisposables
-                                .toMap()
-                                .filter { it.value.isDisposed }
-                                .map { it.key }
-                                .forEach { cmdDisposables.remove(it) }
-                        }
-                    }
-                    .filter { it.modelPrime != null }
-                    .map { it.modelPrime!! }
-                    .scan(SubsState<ModelT, SubT>()) { subsState, model ->
-                        val subsPrime = subContext.execute(
-                            f = subscriptions,
-                            model = model
-                        )
-
-                        SubsState(model, subs = subsState.subsPrime, subsPrime = subsPrime)
-                    }
-                    .doOnNext { (_, subs, subsPrime) ->
-                        val subsDiffs = computeSubsDiff(old = subs, new = subsPrime)
-                        val msgObs = msgInput.mergeWith(msgSubj).hide()
-                        val modelObs = modelSubj.hide()
-                            .filter { it is Some<*> }
-                            .map { it.toNullable()!! }
-
-                        subsDiffs.forEach { diff ->
-                            when (diff) {
-                                is SubsDiffOp.Create ->
-                                    subToObservable(diff.sub, msgObs, modelObs)
-                                        .doOnNext(msgSubj::onNext)
-                                        .doOnError { error ->
-                                            SubscriptionError(diff.sub as Any, error)
-                                                .let { subError ->
-                                                    when (val msg = errorToMsg(subError)) {
-                                                        null -> errorSubj.onError(subError)
-                                                        else -> msgSubj.onNext(msg)
-                                                    }
-                                                }
-                                        }
-                                        .subscribe({}, {}, {})
-                                        .let { disposable ->
-                                            synchronized(subDisposables) {
-                                                subDisposables[diff.sub.id] = disposable
-                                            }
-                                        }
-                                is SubsDiffOp.Dispose -> {
-                                    synchronized(subDisposables) {
-                                        subDisposables[diff.sub.id]?.dispose()
-                                        subDisposables.remove(diff.sub.id)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .skip(1)
-                    .map { it.model!! }
-                    .doOnDispose {
-                        cmdDisposables.values.forEach(Disposable::dispose)
-                        subDisposables.values.forEach(Disposable::dispose)
-                        watcherDisposables.forEach(Disposable::dispose)
-                    }
-            }
-
-    fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> test(
-        update: UpdateF<ModelT, MsgT, CmdT>,
-        initModel: ModelT,
-        msgs: List<MsgT>
-    ): List<Step<ModelT, MsgT, CmdT, SubT>> {
-        val context = UpdateContext<ModelT, MsgT, CmdT>()
-        return Observable.fromIterable(msgs)
-            .scan(emptyList<Step<ModelT, MsgT, CmdT, SubT>>()) { acc, msg ->
-                val model =
-                    when (acc.isEmpty()) {
-                        true -> initModel
-                        false -> acc.last().run { modelPrime ?: model }
-                    }
-                val updatePrime = context.execute(update, model, msg)
-                val modelPrime = updatePrime.modelPrime
-                val cmdsStarted = updatePrime.cmdOps
-                    .mapNotNull { it as? CmdOp.Run<CmdT> }
-                    .map { it.cmd }
-                val cmdsCancelled = updatePrime.cmdOps
-                    .mapNotNull { it as? CmdOp.Cancel<CmdT> }
-                    .map { it.cmdId }
-                val step = Step(
-                    model = model,
-                    msg = msg,
-                    modelPrime = modelPrime,
-                    cmdsStarted = cmdsStarted,
-                    cmdIdsCancelled = cmdsCancelled,
-                    subs = emptyList<SubT>() // TODO Add subs to Step
-                )
-                acc + step
-            }
-            .blockingLast()
-            .toList()
-    }
-}
-
-internal sealed class CmdOp<CmdT> {
-    data class Run<CmdT>(val cmd: CmdT) : CmdOp<CmdT>()
-    data class Cancel<CmdT>(val cmdId: String) : CmdOp<CmdT>()
-}
-
-internal data class UpdatePrime<ModelT, CmdT>(
-    val model: ModelT,
-    val modelPrime: ModelT?,
-    val cmdOps: List<CmdOp<CmdT>>
-)
-
-private data class SubsState<ModelT, SubT>(
-    val model: ModelT? = null,
-    val subs: List<SubT> = emptyList(),
-    val subsPrime: List<SubT> = emptyList()
-)
-
-private sealed class SubsDiffOp<SubT> {
-    data class Create<SubT>(val sub: SubT) : SubsDiffOp<SubT>()
-    data class Dispose<SubT>(val sub: SubT) : SubsDiffOp<SubT>()
-}
-
-private fun <SubT : Sub> computeSubsDiff(old: List<SubT>, new: List<SubT>): List<SubsDiffOp<SubT>> {
-    val oldIdx = old.map { it.id to it }.toMap()
-    val newIdx = new.map { it.id to it }.toMap()
-
-    val toCreateIds = newIdx.keys - oldIdx.keys
-    val toDisposeIds = oldIdx.keys - newIdx.keys
-
-    val toCreate: List<SubsDiffOp<SubT>> =
-        toCreateIds
-            .map { id -> newIdx.getValue(id) }
-            .map { SubsDiffOp.Create(it) }
-
-    val toDispose: List<SubsDiffOp<SubT>> =
-        toDisposeIds
-            .map { id -> oldIdx.getValue(id) }
-            .map { SubsDiffOp.Dispose(it) }
-
-    return toDispose + toCreate
 }

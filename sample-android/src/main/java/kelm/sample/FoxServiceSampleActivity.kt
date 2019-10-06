@@ -11,6 +11,7 @@ import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
+import kelm.Log
 import kelm.sample.FoxServiceElement.Cmd
 import kelm.sample.FoxServiceElement.Model
 import kelm.sample.FoxServiceElement.Msg
@@ -44,7 +45,8 @@ class FoxServiceSampleActivity : AppCompatActivity() {
             .start(
                 msgInput = msgSubj,
                 cmdToMaybe = ::cmdToMaybe,
-                subToObs = { _, _, _ -> Observable.empty() }
+                subToObs = { _, _, _ -> Observable.empty() },
+                logger = ::logger
             )
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe { model ->
@@ -100,4 +102,9 @@ class FoxServiceSampleActivity : AppCompatActivity() {
             .cast(Msg::class.java)
             .onErrorReturn { Msg.ConnError }
             .toMaybe()
+
+    private fun logger(log: Log<Model, Msg, Cmd, Nothing>): Disposable? {
+        println(log)
+        return null
+    }
 }

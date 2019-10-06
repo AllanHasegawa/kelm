@@ -20,26 +20,26 @@ class SignUpFormViewModel : ViewModel() {
     val msgSubj = PublishSubject.create<Msg>()
 
     private val modelLiveData = MutableLiveData<Model>()
-    private val streamDisposable: Disposable
+//    private val streamDisposable: Disposable
 
     private val service = FakeSignUpService()
 
     init {
-        streamDisposable = Kelm
-            .build<Model, Msg, Cmd, Nothing>(
-                msgInput = msgSubj,
-                initModel = initModel(),
-                cmdToMaybe = ::cmdToMaybe,
-                update = { model, msg -> update(model, msg) }
-            )
-            .subscribe(modelLiveData::postValue)
+//        streamDisposable = Kelm
+//            .build<Model, Msg, Cmd, Nothing>(
+//                msgInput = msgSubj,
+//                initModel = initModel(),
+//                cmdToMaybe = ::cmdToMaybe,
+//                update = { model, msg -> update(model, msg) }
+//            )
+//            .subscribe(modellLiveData::postValue)
     }
 
     fun observeModel(): LiveData<Model> = modelLiveData
 
     override fun onCleared() {
         super.onCleared()
-        streamDisposable.dispose()
+//        streamDisposable.dispose()
     }
 
     private fun UpdateContext<Model, Msg, Cmd>.update(model: Model, msg: Msg) =

@@ -1,5 +1,6 @@
 package kelm.sample
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import io.reactivex.Maybe
@@ -7,6 +8,7 @@ import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
+import kelm.Log
 import kelm.sample.ClockElement.Model
 import kelm.sample.ClockElement.Msg
 import kelm.sample.ClockElement.Sub
@@ -18,7 +20,7 @@ import java.util.concurrent.TimeUnit
 
 class ClockSampleActivity : AppCompatActivity() {
     private val msgSubj = PublishSubject.create<Msg>()
-    private var stateDisposable: Disposable? = null
+    private var elementDisposable: Disposable? = null
 
     private val dateTimeFormatter by lazy {
         SimpleDateFormat("HH:mm:ss z", Locale.getDefault())
@@ -33,10 +35,11 @@ class ClockSampleActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("SetTextI18n")
     override fun onStart() {
         super.onStart()
 
-        stateDisposable =
+        elementDisposable =
             ClockElement
                 .start(
                     msgInput = msgSubj,
@@ -45,7 +48,8 @@ class ClockSampleActivity : AppCompatActivity() {
                         when (sub) {
                             is Sub.ClockTickSub -> clockTickGeneratorObs()
                         }
-                    }
+                    },
+                    logger = ::logger
                 )
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe { model ->
@@ -65,8 +69,8 @@ class ClockSampleActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
 
-        stateDisposable?.dispose()
-        stateDisposable = null
+        elementDisposable?.dispose()
+        elementDisposable = null
     }
 
     private fun formatDateTime(instant: Long): String =
@@ -79,6 +83,16 @@ class ClockSampleActivity : AppCompatActivity() {
             .map { System.currentTimeMillis() }
             .map(Msg::Tick)
             .cast(Msg::class.java)
-            .doOnSubscribe { toast("Clock tick subscribed") }
-            .doOnDispose { toast("Clock tick disposed") }
+
+    private fun logger(log: Log<Model, Msg, Nothing, Sub>): Disposable? {
+        when (log) {
+            is Log.SubscriptionSubscribed -> toast("[${log.sub.id}] subscribed")
+            is Log.SubscriptionDisposed -> toast("[${log.sub.id}] disposed")
+            is Log.SubscriptionCancelled -> toast("[${log.sub.id}] cancelled")
+            is Log.SubscriptionEmission -> println("[${log.sub.id}] emitted: ${log.msg}")
+            is Log.Update -> println("---\nModel: ${log.modelPrime}\nSubs: ${log.subs}\n---")
+        }
+
+        return null
+    }
 }
