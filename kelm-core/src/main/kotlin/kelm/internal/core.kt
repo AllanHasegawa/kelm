@@ -105,8 +105,8 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                                 Log.CmdIdNotFoundToCancel<ModelT, MsgT, CmdT, SubT>(cmdId).log()
                             }
                         } else {
-                            disposable.dispose()
                             Log.CmdCancelled<ModelT, MsgT, CmdT, SubT>(cmdId).log()
+                            disposable.dispose()
                         }
                     }
 
@@ -115,12 +115,9 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                             is CmdOp.Cancel -> cancelCmd(cmdOp.cmdId, logIdNotFound = true)
                             is CmdOp.Run -> {
                                 cancelCmd(cmdOp.cmd.id, logIdNotFound = false)
+                                Log.CmdStarted<ModelT, MsgT, CmdT, SubT>(cmdOp.cmd).log()
                                 cmdDisposables[cmdOp.cmd.id] =
                                     cmdToMaybe(cmdOp.cmd)
-                                        .doOnSubscribe {
-                                            Log.CmdSubscribed<ModelT, MsgT, CmdT, SubT>(cmdOp.cmd)
-                                                .log()
-                                        }
                                         .doOnSuccess {
                                             Log.CmdEmission<ModelT, MsgT, CmdT, SubT>(cmdOp.cmd, it)
                                                 .log()
@@ -139,10 +136,6 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                                                         else -> msgSubj.onNext(msg)
                                                     }
                                                 }
-                                        }
-                                        .doOnDispose {
-                                            Log.CmdDisposed<ModelT, MsgT, CmdT, SubT>(cmdOp.cmd)
-                                                .log()
                                         }
                                         .subscribe({}, {})
                             }
@@ -192,8 +185,8 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                         when (diff) {
                             is SubsDiffOp.Create ->
                                 subToObservable(diff.sub, msgObs, modelObs)
-                                    .doOnSubscribe {
-                                        Log.SubscriptionSubscribed<ModelT, MsgT, CmdT, SubT>(diff.sub)
+                                    .also {
+                                        Log.SubscriptionStarted<ModelT, MsgT, CmdT, SubT>(diff.sub)
                                             .log()
                                     }
                                     .doOnNext { msg ->
@@ -213,10 +206,6 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                                                     else -> msgSubj.onNext(msg)
                                                 }
                                             }
-                                    }
-                                    .doOnDispose {
-                                        Log.SubscriptionDisposed<ModelT, MsgT, CmdT, SubT>(diff.sub)
-                                            .log()
                                     }
                                     .subscribe({}, {}, {})
                                     .let { disposable ->

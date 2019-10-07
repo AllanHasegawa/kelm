@@ -122,10 +122,7 @@ sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
         val subs: List<SubT> = emptyList()
     ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class SubscriptionSubscribed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
-        Log<ModelT, MsgT, CmdT, SubT>()
-
-    data class SubscriptionDisposed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
+    data class SubscriptionStarted<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
         Log<ModelT, MsgT, CmdT, SubT>()
 
     data class SubscriptionCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
@@ -141,10 +138,7 @@ sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
         val msg: MsgT
     ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class CmdSubscribed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd) :
-        Log<ModelT, MsgT, CmdT, SubT>()
-
-    data class CmdDisposed<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd) :
+    data class CmdStarted<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd) :
         Log<ModelT, MsgT, CmdT, SubT>()
 
     data class CmdCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmdId: String) :
