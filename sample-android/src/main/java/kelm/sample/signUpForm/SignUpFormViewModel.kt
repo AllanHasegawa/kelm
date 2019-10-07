@@ -4,9 +4,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import io.reactivex.Maybe
-import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
-import kelm.Kelm
 import kelm.UpdateContext
 import kelm.sample.isEmailValid
 import kelm.sample.signUpForm.SignUpFormElement.Cmd
@@ -51,7 +49,10 @@ class SignUpFormViewModel : ViewModel() {
             is Model.PetScreen -> model
         }
 
-    private fun UpdateContext<Model, Msg, Cmd>.handleFormVisibleUpdate(model: Model.FormVisible, msg: Msg) = with(model) {
+    private fun UpdateContext<Model, Msg, Cmd>.handleFormVisibleUpdate(
+        model: Model.FormVisible,
+        msg: Msg
+    ) = with(model) {
         when (msg) {
             is Msg.EmailChanged -> copy(email = msg.email, emailError = null)
             is Msg.PasswordChanged -> copy(password = msg.password, passwordError = null)
