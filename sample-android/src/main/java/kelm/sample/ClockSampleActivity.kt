@@ -86,12 +86,11 @@ class ClockSampleActivity : AppCompatActivity() {
 
     private fun logger(log: Log<Model, Msg, Nothing, Sub>): Disposable? {
         when (log) {
-            is Log.SubscriptionSubscribed -> toast("[${log.sub.id}] subscribed")
-            is Log.SubscriptionDisposed -> toast("[${log.sub.id}] disposed")
+            is Log.SubscriptionStarted -> toast("[${log.sub.id}] started")
             is Log.SubscriptionCancelled -> toast("[${log.sub.id}] cancelled")
             is Log.SubscriptionEmission -> println("[${log.sub.id}] emitted: ${log.msg}")
             is Log.Update -> println("---\nModel: ${log.modelPrime}\nSubs: ${log.subs}\n---")
-        }
+       }
 
         return null
     }

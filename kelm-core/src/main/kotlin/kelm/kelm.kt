@@ -8,11 +8,11 @@ import kelm.internal.UpdatePrime
 import kelm.internal.build
 import java.util.UUID
 
-typealias UpdateF<ModelT, MsgT, CmdT> =
-        UpdateContext<ModelT, MsgT, CmdT>.(ModelT, MsgT) -> ModelT?
+typealias UpdateF<ModelT, MsgT, CmdT, SubT> =
+    UpdateContext<ModelT, MsgT, CmdT, SubT>.(ModelT, MsgT) -> ModelT?
 
 typealias LoggerF<ModelT, MsgT, CmdT, SubT> =
-            (Log<ModelT, MsgT, CmdT, SubT>) -> Disposable?
+        (Log<ModelT, MsgT, CmdT, SubT>) -> Disposable?
 
 abstract class Cmd(open val id: String = randomUuid()) {
     companion object {
@@ -24,11 +24,11 @@ abstract class Sub(open val id: String) {
     companion object
 }
 
-class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
+class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
 
     internal fun execute(
-        f: UpdateF<ModelT, MsgT, CmdT>,
+        f: UpdateF<ModelT, MsgT, CmdT, SubT>,
         model: ModelT,
         msg: MsgT
     ): UpdatePrime<ModelT, MsgT, CmdT> {
@@ -53,28 +53,45 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd> internal constructor() {
         cmdOps.add(CmdOp.Run(cmd))
     }
 
-    fun <OtherModelT, OtherMsgT, OtherCmdT : Cmd> switchContext(
-        model: OtherModelT,
-        msg: OtherMsgT,
-        otherCmdToCmd: (OtherCmdT) -> CmdT? = { null },
-        update: UpdateF<OtherModelT, OtherMsgT, OtherCmdT>
+    fun <OtherModelT, OtherMsgT, OtherCmdT : Cmd, OtherSubT : Sub> switchContext(
+        otherElement: Kelm.Element<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>,
+        otherModel: OtherModelT,
+        otherMsg: OtherMsgT,
+        otherCmdToMsg: (OtherCmdT) -> MsgT? = { null },
+        otherSubToSub: (OtherSubT) -> SubT? = { null }
     ): OtherModelT? {
-        val context = UpdateContext<OtherModelT, OtherMsgT, OtherCmdT>()
-        val modelPrime = update(context, model, msg)
+        val otherUpdateContext = UpdateContext<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>()
+        val otherSubContext = SubContext<OtherSubT>()
 
-        @Suppress("UNCHECKED_CAST")
-        val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
-            when (otherCmdOp) {
-                is CmdOp.Run -> {
-                    val newCmd = otherCmdToCmd(otherCmdOp.cmd)
-                        ?: return@mapNotNull null
-                    CmdOp.Run(newCmd)
-                }
-                else -> otherCmdOp
-            } as CmdOp<CmdT>
+        val otherUpdatePrime = with(otherElement) {
+            with(otherUpdateContext) {
+                execute({ model, msg -> update(model, msg) }, otherModel, otherMsg)
+            }
         }
-        cmdOps.addAll(cmds)
-        return modelPrime
+        val otherSubs = with(otherElement) {
+            with(otherSubContext) {
+                subscriptions(otherUpdatePrime.modelPrime ?: otherUpdatePrime.model)
+            }
+        }
+
+
+
+        return null
+//        val otherModelPrime = otherContext.execute(, )
+//
+//        @Suppress("UNCHECKED_CAST")
+//        val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
+//            when (otherCmdOp) {
+//                is CmdOp.Run -> {
+//                    val newCmd = otherCmdToCmd(otherCmdOp.cmd)
+//                        ?: return@mapNotNull null
+//                    CmdOp.Run(newCmd)
+//                }
+//                else -> otherCmdOp
+//            } as CmdOp<CmdT>
+//        }
+//        cmdOps.addAll(cmds)
+//        return modelPrime
     }
 
     private fun getCmdOps() = cmdOps.toList()
@@ -158,7 +175,7 @@ object Kelm {
     abstract class Sandbox<ModelT, MsgT> : Element<ModelT, MsgT, Nothing, Nothing>() {
         abstract fun updateSimple(model: ModelT, msg: MsgT): ModelT?
 
-        final override fun UpdateContext<ModelT, MsgT, Nothing>.update(
+        final override fun UpdateContext<ModelT, MsgT, Nothing, Nothing>.update(
             model: ModelT,
             msg: MsgT
         ): ModelT? = updateSimple(model, msg)
@@ -183,7 +200,11 @@ object Kelm {
         abstract fun initModel(): ModelT
         open fun initCmds(): List<CmdT>? = null
 
-        abstract fun UpdateContext<ModelT, MsgT, CmdT>.update(model: ModelT, msg: MsgT): ModelT?
+        abstract fun UpdateContext<ModelT, MsgT, CmdT, SubT>.update(
+            model: ModelT,
+            msg: MsgT
+        ): ModelT?
+
         abstract fun SubContext<SubT>.subscriptions(model: ModelT)
         abstract fun errorToMsg(error: ExternalError): MsgT?
 

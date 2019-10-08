@@ -39,7 +39,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
     )
 
     @ExperimentalTime
-    override fun UpdateContext<Model, Msg, Cmd>.update(model: Model, msg: Msg): Model? =
+    override fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg): Model? =
         when (model) {
             is Model.Loading ->
                 when (msg) {

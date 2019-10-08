@@ -40,7 +40,7 @@ class SignUpFormViewModel : ViewModel() {
 //        streamDisposable.dispose()
     }
 
-    private fun UpdateContext<Model, Msg, Cmd>.update(model: Model, msg: Msg) =
+    private fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg) =
         when (model) {
             is Model.FormVisible -> handleFormVisibleUpdate(model, msg)
             is Model.RegisteringDevice -> handleRegisteringDeviceUpdate(model, msg)
@@ -49,7 +49,7 @@ class SignUpFormViewModel : ViewModel() {
             is Model.PetScreen -> model
         }
 
-    private fun UpdateContext<Model, Msg, Cmd>.handleFormVisibleUpdate(
+    private fun UpdateContext<Model, Msg, Cmd, Nothing>.handleFormVisibleUpdate(
         model: Model.FormVisible,
         msg: Msg
     ) = with(model) {
@@ -110,7 +110,7 @@ class SignUpFormViewModel : ViewModel() {
         }
     }
 
-    private fun UpdateContext<Model, Msg, Cmd>.handleRegisteringDeviceUpdate(
+    private fun UpdateContext<Model, Msg, Cmd, Nothing>.handleRegisteringDeviceUpdate(
         model: Model.RegisteringDevice,
         msg: Msg
     ) = with(model) {

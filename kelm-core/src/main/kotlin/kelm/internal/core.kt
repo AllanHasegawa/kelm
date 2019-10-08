@@ -59,7 +59,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
     ) -> Observable<MsgT> = { _, _, _ -> Observable.error(SubFactoryNotImplementedException()) },
     errorToMsg: (error: ExternalError) -> MsgT? = { null },
     logger: (Log<ModelT, MsgT, CmdT, SubT>) -> Disposable?,
-    update: UpdateF<ModelT, MsgT, CmdT>
+    update: UpdateF<ModelT, MsgT, CmdT, SubT>
 ): Observable<ModelT> = Observable.defer {
     val errorSubj = PublishSubject.create<MsgT>()
     val modelSubj =
@@ -81,7 +81,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
     val initCmdOps = initCmds?.map { cmd -> CmdOp.Run(cmd) }
         ?: emptyList()
 
-    val updateContext = UpdateContext<ModelT, MsgT, CmdT>()
+    val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
     val subContext = SubContext<SubT>()
 
     msgInput
@@ -233,11 +233,11 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
 }
 
 fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> test(
-    update: UpdateF<ModelT, MsgT, CmdT>,
+    update: UpdateF<ModelT, MsgT, CmdT, SubT>,
     initModel: ModelT,
     msgs: List<MsgT>
 ): List<Step<ModelT, MsgT, CmdT, SubT>> {
-    val context = UpdateContext<ModelT, MsgT, CmdT>()
+    val context = UpdateContext<ModelT, MsgT, CmdT, SubT>()
     return Observable.fromIterable(msgs)
         .scan(emptyList<Step<ModelT, MsgT, CmdT, SubT>>()) { acc, msg ->
             val model =
