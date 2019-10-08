@@ -24,8 +24,16 @@ abstract class Sub(open val id: String) {
     companion object
 }
 
+abstract class OtherContextMapper<
+    ModelT, MsgT, CmdT : Cmd, SubT : Sub, ElementT : Kelm.Element<ModelT, MsgT, CmdT, SubT>,
+    OtherModelT, OtherMsgT, OtherCmdT : Cmd, OtherSubT : Sub, OtherElementT : Kelm.Element<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>> {
+    
+}
+
 class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
+    private val otherSubs = mutableListOf<Any>()
+    private val msgsFromOtherContext = mutableListOf<MsgT>()
 
     internal fun execute(
         f: UpdateF<ModelT, MsgT, CmdT, SubT>,
@@ -57,26 +65,42 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         otherElement: Kelm.Element<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>,
         otherModel: OtherModelT,
         otherMsg: OtherMsgT,
-        otherCmdToMsg: (OtherCmdT) -> MsgT? = { null },
-        otherSubToSub: (OtherSubT) -> SubT? = { null }
+        otherCmdToCmd: (OtherCmdT) -> CmdT,
+        otherSubToSub: (OtherSubT) -> SubT,
+        bypassOtherCmdToMsg: (OtherCmdT) -> MsgT? = { null }
     ): OtherModelT? {
         val otherUpdateContext = UpdateContext<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>()
-        val otherSubContext = SubContext<OtherSubT>()
-
         val otherUpdatePrime = with(otherElement) {
             with(otherUpdateContext) {
                 execute({ model, msg -> update(model, msg) }, otherModel, otherMsg)
             }
         }
+        @Suppress("UNCHECKED_CAST")
+        val cmds = otherUpdateContext.cmdOps.mapNotNull { otherCmdOp ->
+            when (otherCmdOp) {
+                is CmdOp.Run -> {
+                    val msgMaybe = bypassOtherCmdToMsg(otherCmdOp.cmd)
+                    if (msgMaybe != null) {
+                        msgsFromOtherContext.add(msgMaybe)
+                        return@mapNotNull null
+                    }
+                    val newCmd = otherCmdToCmd(otherCmdOp.cmd)
+                    CmdOp.Run(newCmd)
+                }
+                else -> otherCmdOp
+            } as CmdOp<CmdT>
+        }
+        cmdOps.addAll(cmds)
+
+        val otherSubContext = SubContext<OtherSubT>()
         val otherSubs = with(otherElement) {
             with(otherSubContext) {
-                subscriptions(otherUpdatePrime.modelPrime ?: otherUpdatePrime.model)
+                execute({ model -> subscriptions(model) }, otherModel)
             }
         }
+        this.otherSubs.addAll(otherSubs)
 
-
-
-        return null
+        return otherUpdatePrime.modelPrime ?: otherUpdatePrime.model
 //        val otherModelPrime = otherContext.execute(, )
 //
 //        @Suppress("UNCHECKED_CAST")
