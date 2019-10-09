@@ -1,4 +1,4 @@
-package kelm.sample.signUpForm
+package kelm.sample.signUp
 
 import io.reactivex.Completable
 import io.reactivex.Single

@@ -1,4 +1,4 @@
-package kelm.sample.signUpForm
+package kelm.sample.signUp
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -7,11 +7,11 @@ import io.reactivex.Maybe
 import io.reactivex.subjects.PublishSubject
 import kelm.UpdateContext
 import kelm.sample.isEmailValid
-import kelm.sample.signUpForm.SignUpFormElement.Cmd
-import kelm.sample.signUpForm.SignUpFormElement.EmailError
-import kelm.sample.signUpForm.SignUpFormElement.Model
-import kelm.sample.signUpForm.SignUpFormElement.Msg
-import kelm.sample.signUpForm.SignUpFormElement.PasswordError
+import kelm.sample.signUp.SignUpElement.Cmd
+import kelm.sample.signUp.SignUpElement.EmailError
+import kelm.sample.signUp.SignUpElement.Model
+import kelm.sample.signUp.SignUpElement.Msg
+import kelm.sample.signUp.SignUpElement.PasswordError
 import java.util.UUID
 
 class SignUpFormViewModel : ViewModel() {
@@ -59,7 +59,6 @@ class SignUpFormViewModel : ViewModel() {
 
     fun onPetRegisterClick() {
         Msg.RegisterPetClicked.up()
-
     }
 
     private fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg) =

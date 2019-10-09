@@ -1,4 +1,4 @@
-package kelm.sample.signUpForm
+package kelm.sample.signUp
 
 import android.os.Bundle
 import android.view.View
@@ -8,8 +8,8 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import kelm.sample.R
 import kelm.sample.SimpleTextWatcher
-import kelm.sample.signUpForm.SignUpFormElement.Model
-import kelm.sample.signUpForm.SignUpFormElement.Msg
+import kelm.sample.signUp.SignUpElement.Model
+import kelm.sample.signUp.SignUpElement.Msg
 import kotlinx.android.synthetic.main.activity_sign_up_form_sample.*
 import kotlinx.android.synthetic.main.layout_sign_up_form.*
 import kotlinx.android.synthetic.main.layout_sign_up_form_registering_device.*
@@ -20,9 +20,7 @@ class SignUpFormSampleActivity : AppCompatActivity() {
         ViewModelProvider(this).get(SignUpFormViewModel::class.java)
     }
 
-    private val emailWatcher = SimpleTextWatcher { viewModel.onEmailChanged(it) }
-    private val passwordWatcher = SimpleTextWatcher { viewModel.onPasswordChanged(it) }
-    private val petNameWatcher = SimpleTextWatcher { viewModel.onPetNameChanged(it) }
+
 
     private var inflatedViewId: Int = -1
 
@@ -69,59 +67,6 @@ class SignUpFormSampleActivity : AppCompatActivity() {
     }
 
     private fun handleFormVisible(model: Model.FormVisible) = with(model) {
-        fun EditText.updateEditTextIfNeeded(text: String?, enabled: Boolean) {
-            if (this.text.toString() != text) {
-                this.setText(text)
-                if (text != null) {
-                    this.setSelection(text.length)
-                }
-            }
-            this.isEnabled = enabled
-            this.isFocusable = enabled
-            this.isFocusableInTouchMode = enabled
-        }
-
-        formSubmitBt.setOnClickListener { viewModel.onFormSubmitBtClick() }
-
-        removeFormTextWatchers()
-
-        formEmailEt.updateEditTextIfNeeded(email, inputEnabled)
-        formEmailEt.error = when (emailError) {
-            SignUpFormElement.EmailError.Required -> "Email is required"
-            SignUpFormElement.EmailError.Validation -> "Email is not valid"
-            null -> null
-        }
-
-        formPasswordEt.updateEditTextIfNeeded(password, inputEnabled)
-        formPasswordEt.error = when (passwordError) {
-            SignUpFormElement.PasswordError.Required -> "Password is required"
-            SignUpFormElement.PasswordError.TooSimple -> "Passwords must be more than 6 letters"
-            null -> null
-        }
-
-        formPetNameEt.updateEditTextIfNeeded(petName, inputEnabled)
-        formPetNameEt.error = when (petNameRequiredError) {
-            true -> "Pet name is required"
-            false -> null
-        }
-        addFormTextWatchers()
-
-        formRegisterPetCheckBox.setOnCheckedChangeListener { _, _ -> viewModel.onPetRegisterClick() }
-        formRegisterPetCheckBox.isChecked = showPetNameInput
-        formRegisterPetCheckBox.isEnabled = inputEnabled
-        formPetNameEt.visibility = when (showPetNameInput) {
-            true -> View.VISIBLE
-            false -> View.INVISIBLE
-        }
-
-        when (buttonLoading) {
-            true -> formSubmitBt.startAnimation()
-            false -> formSubmitBt.revertAnimation()
-        }
-        formConnErrorTv.visibility = when (showConnErrorCTA) {
-            true -> View.VISIBLE
-            false -> View.INVISIBLE
-        }
     }
 
     private fun handleRegisteringDevice(model: Model.RegisteringDevice) = with(model) {
@@ -150,17 +95,5 @@ class SignUpFormSampleActivity : AppCompatActivity() {
             true -> "Error while registering your pet, please try again later."
             false -> "Registering $petName <3"
         }
-    }
-
-    private fun addFormTextWatchers() {
-        formEmailEt.addTextChangedListener(emailWatcher)
-        formPasswordEt.addTextChangedListener(passwordWatcher)
-        formPetNameEt.addTextChangedListener(petNameWatcher)
-    }
-
-    private fun removeFormTextWatchers() {
-        formEmailEt.removeTextChangedListener(emailWatcher)
-        formPasswordEt.removeTextChangedListener(passwordWatcher)
-        formPetNameEt.removeTextChangedListener(petNameWatcher)
     }
 }
