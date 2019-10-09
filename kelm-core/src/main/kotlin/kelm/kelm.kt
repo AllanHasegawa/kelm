@@ -24,25 +24,26 @@ abstract class Sub(open val id: String) {
     companion object
 }
 
-abstract class OtherContextMapper<
-    ModelT, MsgT, CmdT : Cmd, SubT : Sub, ElementT : Kelm.Element<ModelT, MsgT, CmdT, SubT>,
-    OtherModelT, OtherMsgT, OtherCmdT : Cmd, OtherSubT : Sub, OtherElementT : Kelm.Element<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>> {
-    
-}
-
 class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
-    private val otherSubs = mutableListOf<Any>()
+    private val subsFromOtherContext = mutableListOf<SubT>()
     private val msgsFromOtherContext = mutableListOf<MsgT>()
 
     internal fun execute(
         f: UpdateF<ModelT, MsgT, CmdT, SubT>,
         model: ModelT,
         msg: MsgT
-    ): UpdatePrime<ModelT, MsgT, CmdT> {
+    ): UpdatePrime<ModelT, MsgT, CmdT, SubT> {
         clear()
         val modelPrime = f(this, model, msg)
-        return UpdatePrime(model, msg, modelPrime, getCmdOps())
+        return UpdatePrime(
+            model = model,
+            msg = msg,
+            modelPrime = modelPrime,
+            cmdOps = cmdOps.toList(),
+            subsFromOtherContext = subsFromOtherContext.toList(),
+            msgsFromOtherContext = msgsFromOtherContext.toList()
+        )
     }
 
     operator fun CmdT.unaryPlus() {
@@ -97,31 +98,16 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
             with(otherSubContext) {
                 execute({ model -> subscriptions(model) }, otherModel)
             }
-        }
-        this.otherSubs.addAll(otherSubs)
+        }.map(otherSubToSub)
+        subsFromOtherContext.addAll(otherSubs)
 
         return otherUpdatePrime.modelPrime ?: otherUpdatePrime.model
-//        val otherModelPrime = otherContext.execute(, )
-//
-//        @Suppress("UNCHECKED_CAST")
-//        val cmds = context.cmdOps.mapNotNull { otherCmdOp ->
-//            when (otherCmdOp) {
-//                is CmdOp.Run -> {
-//                    val newCmd = otherCmdToCmd(otherCmdOp.cmd)
-//                        ?: return@mapNotNull null
-//                    CmdOp.Run(newCmd)
-//                }
-//                else -> otherCmdOp
-//            } as CmdOp<CmdT>
-//        }
-//        cmdOps.addAll(cmds)
-//        return modelPrime
     }
-
-    private fun getCmdOps() = cmdOps.toList()
 
     private fun clear() {
         cmdOps.clear()
+        subsFromOtherContext.clear()
+        msgsFromOtherContext.clear()
     }
 }
 

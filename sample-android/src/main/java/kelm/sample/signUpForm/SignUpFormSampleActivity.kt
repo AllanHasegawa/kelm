@@ -5,7 +5,7 @@ import android.view.View
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
+import androidx.lifecycle.ViewModelProvider
 import kelm.sample.R
 import kelm.sample.SimpleTextWatcher
 import kelm.sample.signUpForm.SignUpFormElement.Model
@@ -17,14 +17,12 @@ import kotlinx.android.synthetic.main.layout_sign_up_form_registering_pet.*
 
 class SignUpFormSampleActivity : AppCompatActivity() {
     private val viewModel by lazy {
-        ViewModelProviders.of(this).get(SignUpFormViewModel::class.java)
+        ViewModelProvider(this).get(SignUpFormViewModel::class.java)
     }
 
-    private val msgSubj by lazy { viewModel.msgSubj }
-
-    private val emailWatcher = SimpleTextWatcher { msgSubj.onNext(Msg.EmailChanged(it)) }
-    private val passwordWatcher = SimpleTextWatcher { msgSubj.onNext(Msg.PasswordChanged(it)) }
-    private val petNameWatcher = SimpleTextWatcher { msgSubj.onNext(Msg.PetNameChanged(it)) }
+    private val emailWatcher = SimpleTextWatcher { viewModel.onEmailChanged(it) }
+    private val passwordWatcher = SimpleTextWatcher { viewModel.onPasswordChanged(it) }
+    private val petNameWatcher = SimpleTextWatcher { viewModel.onPetNameChanged(it) }
 
     private var inflatedViewId: Int = -1
 
@@ -36,10 +34,7 @@ class SignUpFormSampleActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
 
-        msgSubj.subscribe { println(it) }
-
         viewModel.observeModel().observe(this, Observer { model ->
-            println(model)
             inflateViewByModel(model)
 
             when (model) {
@@ -86,7 +81,7 @@ class SignUpFormSampleActivity : AppCompatActivity() {
             this.isFocusableInTouchMode = enabled
         }
 
-        formSubmitBt.setOnClickListener { msgSubj.onNext(Msg.Continue) }
+        formSubmitBt.setOnClickListener { viewModel.onFormSubmitBtClick() }
 
         removeFormTextWatchers()
 
@@ -111,7 +106,7 @@ class SignUpFormSampleActivity : AppCompatActivity() {
         }
         addFormTextWatchers()
 
-        formRegisterPetCheckBox.setOnCheckedChangeListener { _, _ -> msgSubj.onNext(Msg.RegisterPetClicked) }
+        formRegisterPetCheckBox.setOnCheckedChangeListener { _, _ -> viewModel.onPetRegisterClick() }
         formRegisterPetCheckBox.isChecked = showPetNameInput
         formRegisterPetCheckBox.isEnabled = inputEnabled
         formPetNameEt.visibility = when (showPetNameInput) {

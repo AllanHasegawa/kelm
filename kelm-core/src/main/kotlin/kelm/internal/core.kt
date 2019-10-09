@@ -28,15 +28,17 @@ internal sealed class CmdOp<CmdT> {
     data class Cancel<CmdT>(val cmdId: String) : CmdOp<CmdT>()
 }
 
-internal data class UpdatePrime<ModelT, MsgT, CmdT>(
+internal data class UpdatePrime<ModelT, MsgT, CmdT, SubT>(
     val model: ModelT,
     val msg: MsgT?,
     val modelPrime: ModelT?,
-    val cmdOps: List<CmdOp<CmdT>>
+    val cmdOps: List<CmdOp<CmdT>>,
+    val subsFromOtherContext: List<SubT>,
+    val msgsFromOtherContext: List<MsgT>
 )
 
 private data class SubsState<ModelT, MsgT, CmdT, SubT>(
-    val updatePrime: UpdatePrime<ModelT, MsgT, CmdT>? = null,
+    val updatePrime: UpdatePrime<ModelT, MsgT, CmdT, SubT>? = null,
     val subs: List<SubT> = emptyList(),
     val subsPrime: List<SubT> = emptyList()
 )
@@ -84,13 +86,21 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
     val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
     val subContext = SubContext<SubT>()
 
+    val initUpdatePrime =
+        UpdatePrime(
+            model = initModel,
+            msg = null as MsgT?,
+            modelPrime = initModel,
+            cmdOps = initCmdOps,
+            subsFromOtherContext = emptyList<SubT>(),
+            msgsFromOtherContext = emptyList()
+        )
+
     msgInput
         .serialize()
         .mergeWith(msgSubj)
         .mergeWith(errorSubj)
-        .scan(
-            UpdatePrime(initModel, null as MsgT?, initModel, initCmdOps)
-        ) { acc, msg ->
+        .scan(initUpdatePrime) { acc, msg ->
             val currentModel = acc.modelPrime ?: acc.model
             updateContext.execute(update, currentModel, msg)
         }
@@ -288,7 +298,7 @@ private fun <SubT : Sub> computeSubsDiff(old: List<SubT>, new: List<SubT>): List
 }
 
 private fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> buildLogUpdate(
-    updatePrime: UpdatePrime<ModelT, MsgT, CmdT>,
+    updatePrime: UpdatePrime<ModelT, MsgT, CmdT, SubT>,
     subs: List<SubT>
 ): Log.Update<ModelT, MsgT, CmdT, SubT> =
     Log.Update(

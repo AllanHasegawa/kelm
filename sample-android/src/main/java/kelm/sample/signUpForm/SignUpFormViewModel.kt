@@ -40,6 +40,28 @@ class SignUpFormViewModel : ViewModel() {
 //        streamDisposable.dispose()
     }
 
+    fun onEmailChanged(email: String) {
+        Msg.EmailChanged(email).up()
+    }
+
+    fun onPasswordChanged(pass: String) {
+        Msg.PasswordChanged(pass).up()
+    }
+
+    fun onPetNameChanged(name: String) {
+        Msg.PetNameChanged(name).up()
+
+    }
+
+    fun onFormSubmitBtClick() {
+        Msg.Continue.up()
+    }
+
+    fun onPetRegisterClick() {
+        Msg.RegisterPetClicked.up()
+
+    }
+
     private fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg) =
         when (model) {
             is Model.FormVisible -> handleFormVisibleUpdate(model, msg)
@@ -188,4 +210,6 @@ class SignUpFormViewModel : ViewModel() {
                 .cast(Msg::class.java)
                 .onErrorReturn(Msg::PetRegisterError)
         }.toMaybe()
+
+    private fun Msg.up() = msgSubj.onNext(this)
 }
