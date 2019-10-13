@@ -43,6 +43,7 @@ class FoxServiceSampleActivity : AppCompatActivity() {
 
         modelDisposable = FoxServiceElement
             .start(
+                initModel = FoxServiceElement.initModel(),
                 msgInput = msgSubj,
                 cmdToMaybe = ::cmdToMaybe,
                 subToObs = { _, _, _ -> Observable.empty() },

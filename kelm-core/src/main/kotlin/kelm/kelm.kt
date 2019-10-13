@@ -191,10 +191,12 @@ object Kelm {
         ): ModelT? = updateSimple(model, msg)
 
         fun start(
+            initModel: ModelT,
             msgInput: Observable<MsgT>,
             logger: LoggerF<ModelT, MsgT, Nothing, Nothing> = { null }
         ) =
             start(
+                initModel = initModel,
                 msgInput = msgInput,
                 cmdToMaybe = { Maybe.empty() },
                 subToObs = { _, _, _ -> Observable.empty() },
@@ -207,7 +209,6 @@ object Kelm {
     }
 
     abstract class Element<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
-        abstract fun initModel(): ModelT
         open fun initCmds(): List<CmdT>? = null
 
         abstract fun UpdateContext<ModelT, MsgT, CmdT, SubT>.update(
@@ -219,13 +220,14 @@ object Kelm {
         abstract fun errorToMsg(error: ExternalError): MsgT?
 
         fun start(
+            initModel: ModelT,
             msgInput: Observable<MsgT>,
             cmdToMaybe: (CmdT) -> Maybe<MsgT>,
             subToObs: (SubT, Observable<MsgT>, Observable<ModelT>) -> Observable<MsgT>,
             logger: LoggerF<ModelT, MsgT, CmdT, SubT> = { null }
         ) =
             build(
-                initModel = initModel(),
+                initModel = initModel,
                 initCmds = initCmds(),
                 msgInput = msgInput,
                 cmdToMaybe = cmdToMaybe,

@@ -16,7 +16,7 @@ object CounterElement : Kelm.Sandbox<Model, Msg>() {
         val minusBtEnabled = resetBtEnabled
     }
 
-    override fun initModel() = Model(count = 0)
+    fun initModel() = Model(count = 0)
 
     override fun updateSimple(model: Model, msg: Msg): Model? =
         when (msg) {

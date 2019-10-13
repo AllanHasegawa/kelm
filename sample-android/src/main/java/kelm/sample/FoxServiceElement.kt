@@ -31,7 +31,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         data class Fetch(val delay: Duration) : Cmd()
     }
 
-    override fun initModel() = Model.Loading
+    fun initModel() = Model.Loading
 
     @ExperimentalTime
     override fun initCmds(): List<Cmd>? = listOf(

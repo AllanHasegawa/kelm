@@ -42,6 +42,7 @@ class ClockSampleActivity : AppCompatActivity() {
         elementDisposable =
             ClockElement
                 .start(
+                    initModel = ClockElement.initModel(),
                     msgInput = msgSubj,
                     cmdToMaybe = { Maybe.empty() },
                     subToObs = { sub, _, _ ->
@@ -90,7 +91,7 @@ class ClockSampleActivity : AppCompatActivity() {
             is Log.SubscriptionCancelled -> toast("[${log.sub.id}] cancelled")
             is Log.SubscriptionEmission -> println("[${log.sub.id}] emitted: ${log.msg}")
             is Log.Update -> println("---\nModel: ${log.modelPrime}\nSubs: ${log.subs}\n---")
-       }
+        }
 
         return null
     }

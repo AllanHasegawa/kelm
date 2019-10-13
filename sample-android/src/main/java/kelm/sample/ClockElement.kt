@@ -25,7 +25,7 @@ object ClockElement : Kelm.Element<Model, Msg, Nothing, Sub>() {
         object ClockTickSub : Sub("ClockTick")
     }
 
-    override fun initModel() = Model.Paused
+    fun initModel() = Model.Paused
 
     override fun UpdateContext<Model, Msg, Nothing, Sub>.update(model: Model, msg: Msg): Model? =
         when (model) {

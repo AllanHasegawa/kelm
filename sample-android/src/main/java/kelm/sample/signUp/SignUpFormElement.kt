@@ -9,9 +9,7 @@ import kelm.sample.signUp.SignUpFormElement.Cmd
 import kelm.sample.signUp.SignUpFormElement.Model
 import kelm.sample.signUp.SignUpFormElement.Msg
 
-abstract class SignUpFormElement(
-    private val idempotencyKey: String
-) : Kelm.Element<Model, Msg, Cmd, Nothing>() {
+object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
     enum class EmailError {
         Required,
         Validation
@@ -58,7 +56,7 @@ abstract class SignUpFormElement(
         data class FinishSuccess(val userId: String) : Cmd()
     }
 
-    override fun initModel(): Model =
+    fun initModel(idempotencyKey: String): Model =
         Model(
             email = "",
             emailError = null,

@@ -29,7 +29,11 @@ class CounterSampleActivity : AppCompatActivity() {
         super.onStart()
 
         elementDisposable = CounterElement
-            .start(msgInput = msgSubj, logger = ::logger)
+            .start(
+                initModel = CounterElement.initModel(),
+                msgInput = msgSubj,
+                logger = ::logger
+            )
             .subscribe { state ->
                 counterTv.text = state.count.toString()
                 counterMinusBt.isEnabled = state.minusBtEnabled
@@ -57,8 +61,8 @@ class CounterSampleActivity : AppCompatActivity() {
                 val newCount = log.modelPrime!!.count
                 counterLogTv.text =
                     counterLogTv.text.toString() +
-                            "\n" +
-                            "$previousCount -> '$msgStr' -> $newCount"
+                        "\n" +
+                        "$previousCount -> '$msgStr' -> $newCount"
             }
         }
 
