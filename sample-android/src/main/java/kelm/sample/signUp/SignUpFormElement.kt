@@ -53,7 +53,7 @@ object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
             val password: String
         ) : Cmd()
 
-        data class FinishSuccess(val userId: String) : Cmd()
+        data class FinishSuccess(val userId: String, val petName: String?) : Cmd()
     }
 
     fun initModel(idempotencyKey: String): Model =
@@ -115,7 +115,7 @@ object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                         }
                 }
                 is Msg.UserSignUpSuccessResponse -> {
-                    +Cmd.FinishSuccess(userId = msg.userId)
+                    +Cmd.FinishSuccess(userId = msg.userId, petName = model.petName)
                     null
                 }
                 is Msg.UserSignUpError ->
