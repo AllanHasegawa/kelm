@@ -18,6 +18,10 @@ class FakeSignUpService {
                     false -> throw SocketTimeoutException()
                 }
             }
+            .onErrorResumeNext {
+                Completable.timer(2, TimeUnit.SECONDS)
+                    .andThen(Single.error(it))
+            }
             .delay(4, TimeUnit.SECONDS)
             // We should always have a sensible timeout in a real app
             .timeout(30, TimeUnit.SECONDS)
@@ -31,6 +35,10 @@ class FakeSignUpService {
                     false -> throw SocketTimeoutException()
                 }
             }
+            .onErrorResumeNext {
+                Completable.timer(2, TimeUnit.SECONDS)
+                    .andThen(Completable.error(it))
+            }
             .delay(2, TimeUnit.SECONDS)
             .timeout(30, TimeUnit.SECONDS)
 
@@ -42,6 +50,10 @@ class FakeSignUpService {
                     true -> "pet-id-01234"
                     false -> throw SocketTimeoutException()
                 }
+            }
+            .onErrorResumeNext {
+                Completable.timer(2, TimeUnit.SECONDS)
+                    .andThen(Single.error(it))
             }
             .delay(2, TimeUnit.SECONDS)
             .timeout(30, TimeUnit.SECONDS)

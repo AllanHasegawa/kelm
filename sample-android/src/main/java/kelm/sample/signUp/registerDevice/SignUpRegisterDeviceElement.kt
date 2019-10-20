@@ -1,12 +1,12 @@
-package kelm.sample.signUp
+package kelm.sample.signUp.registerDevice
 
 import kelm.ExternalError
 import kelm.Kelm
 import kelm.SubContext
 import kelm.UpdateContext
-import kelm.sample.signUp.SignUpRegisterDeviceElement.Cmd
-import kelm.sample.signUp.SignUpRegisterDeviceElement.Model
-import kelm.sample.signUp.SignUpRegisterDeviceElement.Msg
+import kelm.sample.signUp.registerDevice.SignUpRegisterDeviceElement.Cmd
+import kelm.sample.signUp.registerDevice.SignUpRegisterDeviceElement.Model
+import kelm.sample.signUp.registerDevice.SignUpRegisterDeviceElement.Msg
 
 object SignUpRegisterDeviceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
     data class Model(
@@ -30,8 +30,12 @@ object SignUpRegisterDeviceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         Model(
             userId = userId,
             showErrorMessage = false,
-            retryButtonLoading = false
+            retryButtonLoading = true
         )
+
+    override fun initCmds(initModel: Model): List<Cmd>? = listOf(
+        Cmd.RegisterDevice(userId = initModel.userId)
+    )
 
     override fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg): Model? =
         with(model) {

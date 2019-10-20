@@ -2,27 +2,34 @@ package kelm.sample.signUp
 
 import android.os.Bundle
 import android.view.View
-import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.get
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import kelm.sample.R
-import kelm.sample.SimpleTextWatcher
 import kelm.sample.signUp.SignUpElement.Model
-import kelm.sample.signUp.SignUpElement.Msg
+import kelm.sample.signUp.form.SignUpFormView
+import kelm.sample.signUp.main.SignUpAppMainView
+import kelm.sample.signUp.main.SignUpPetScreenView
+import kelm.sample.signUp.registerDevice.SignUpRegisterDeviceView
+import kelm.sample.signUp.registerPet.SignUpRegisterPetView
 import kotlinx.android.synthetic.main.activity_sign_up_form_sample.*
-import kotlinx.android.synthetic.main.layout_sign_up_form.*
-import kotlinx.android.synthetic.main.layout_sign_up_form_registering_device.*
-import kotlinx.android.synthetic.main.layout_sign_up_form_registering_pet.*
+import kotlin.reflect.KFunction
 
 class SignUpFormSampleActivity : AppCompatActivity() {
     private val viewModel by lazy {
-        ViewModelProvider(this).get(SignUpFormViewModel::class.java)
+        ViewModelProvider(this).get(SignUpViewModel::class.java)
     }
 
+    private var lastViewConstructorUsed: KFunction<*>? = null
 
-
-    private var inflatedViewId: Int = -1
+    private val modelToViewConstructor = mapOf(
+        Model.FormVisible::class to ::SignUpFormView,
+        Model.RegisterDevice::class to ::SignUpRegisterDeviceView,
+        Model.RegisterPet::class to ::SignUpRegisterPetView,
+        Model.AppMainScreen::class to ::SignUpAppMainView,
+        Model.PetScreen::class to ::SignUpPetScreenView
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,9 +43,25 @@ class SignUpFormSampleActivity : AppCompatActivity() {
             inflateViewByModel(model)
 
             when (model) {
-                is Model.FormVisible -> handleFormVisible(model)
-                is Model.RegisteringDevice -> handleRegisteringDevice(model)
-                is Model.RegisteringPet -> handleRegisteringPet(model)
+                is Model.FormVisible ->
+                    getViewUnsafe<SignUpFormView>().bind(
+                        model.formModel,
+                        onEmailChanged = viewModel::onEmailChanged,
+                        onPasswordChanged = viewModel::onPasswordChanged,
+                        onPetNameChanged = viewModel::onPetNameChanged,
+                        onRegisterPetClicked = viewModel::onPetRegisterClick,
+                        onSubmitClick = viewModel::onFormSubmitBtClick
+                    )
+                is Model.RegisterDevice ->
+                    getViewUnsafe<SignUpRegisterDeviceView>().bind(
+                        model = model.regDeviceModel,
+                        onRetryClick = viewModel::onRegisterDeviceRetryClick
+                    )
+                is Model.RegisterPet ->
+                    getViewUnsafe<SignUpRegisterPetView>().bind(
+                        model = model.regPetModel,
+                        onContinueClick = viewModel::onRegisterPetContinueClick
+                    )
                 is Model.PetScreen,
                 is Model.AppMainScreen -> Unit
             }
@@ -46,54 +69,21 @@ class SignUpFormSampleActivity : AppCompatActivity() {
     }
 
     private fun inflateViewByModel(model: Model) {
-        val viewId = when (model) {
-            is Model.FormVisible -> R.layout.layout_sign_up_form
-            is Model.RegisteringDevice -> R.layout.layout_sign_up_form_registering_device
-            is Model.RegisteringPet -> R.layout.layout_sign_up_form_registering_pet
-            is Model.AppMainScreen -> R.layout.layout_sign_up_form_app_main
-            is Model.PetScreen -> R.layout.layout_sign_up_form_app_pet
-        }
+        val viewConstructor = modelToViewConstructor[model::class] ?: error("Ops")
 
-        with(signUpContainer) {
-            if (viewId != inflatedViewId) {
+        if (lastViewConstructorUsed != viewConstructor) {
+            with(signUpContainer) {
                 if (childCount > 0) {
                     removeAllViews()
                 }
-                inflatedViewId = viewId
-                val view = layoutInflater.inflate(viewId, this, false)
+
+                lastViewConstructorUsed = viewConstructor
+                val view = viewConstructor.invoke(context, null, 0)
                 addView(view)
             }
         }
     }
 
-    private fun handleFormVisible(model: Model.FormVisible) = with(model) {
-    }
-
-    private fun handleRegisteringDevice(model: Model.RegisteringDevice) = with(model) {
-        signUpRegDeviceRetryBt.setOnClickListener { msgSubj.onNext(Msg.Retry) }
-
-        when (retryButtonLoading) {
-            true -> signUpRegDeviceRetryBt.startAnimation()
-            false -> signUpRegDeviceRetryBt.revertAnimation()
-        }
-
-        signUpRegDeviceStatusTv.text = when (showErrorMessage) {
-            true -> "Error when setting up your account. Try again."
-            false -> "Setting up your account"
-        }
-    }
-
-    private fun handleRegisteringPet(model: Model.RegisteringPet) = with(model) {
-        signUpRegPetContinueBt.setOnClickListener { msgSubj.onNext(Msg.Continue) }
-
-        when (showContinueButton) {
-            true -> signUpRegPetContinueBt.revertAnimation()
-            false -> signUpRegPetContinueBt.startAnimation()
-        }
-
-        signUpRegPetStatusTv.text = when (showErrorMessage) {
-            true -> "Error while registering your pet, please try again later."
-            false -> "Registering $petName <3"
-        }
-    }
+    @Suppress("UNCHECKED_CAST")
+    private fun <T : View> getViewUnsafe() = signUpContainer[0] as T
 }

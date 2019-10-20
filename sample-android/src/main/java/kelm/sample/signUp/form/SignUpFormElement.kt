@@ -1,13 +1,13 @@
-package kelm.sample.signUp
+package kelm.sample.signUp.form
 
 import kelm.ExternalError
 import kelm.Kelm
 import kelm.SubContext
 import kelm.UpdateContext
 import kelm.sample.isEmailValid
-import kelm.sample.signUp.SignUpFormElement.Cmd
-import kelm.sample.signUp.SignUpFormElement.Model
-import kelm.sample.signUp.SignUpFormElement.Msg
+import kelm.sample.signUp.form.SignUpFormElement.Cmd
+import kelm.sample.signUp.form.SignUpFormElement.Model
+import kelm.sample.signUp.form.SignUpFormElement.Msg
 
 object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
     enum class EmailError {
@@ -58,9 +58,9 @@ object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
     fun initModel(idempotencyKey: String): Model =
         Model(
-            email = "",
+            email = "h@h.c",
             emailError = null,
-            password = "",
+            password = "123456",
             passwordError = null,
             showPetNameInput = false,
             petName = null,
@@ -89,10 +89,12 @@ object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                         emailError = EmailError.Required
                     }
                     if (password.length < 6) {
-                        passwordError = PasswordError.TooSimple
+                        passwordError =
+                            PasswordError.TooSimple
                     }
                     if (password.isEmpty()) {
-                        passwordError = PasswordError.Required
+                        passwordError =
+                            PasswordError.Required
                     }
                     if (showPetNameInput && petName.isNullOrBlank()) {
                         petNameRequiredError = true

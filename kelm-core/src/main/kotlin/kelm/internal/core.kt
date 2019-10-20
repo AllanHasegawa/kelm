@@ -13,7 +13,6 @@ import kelm.ExternalError
 import kelm.Log
 import kelm.Optional
 import kelm.Some
-import kelm.Step
 import kelm.Sub
 import kelm.SubContext
 import kelm.SubFactoryNotImplementedException
@@ -22,6 +21,7 @@ import kelm.UpdateContext
 import kelm.UpdateF
 import kelm.toNullable
 import kelm.toOptional
+import java.util.concurrent.atomic.AtomicInteger
 
 internal sealed class CmdOp<CmdT> {
     data class Run<CmdT>(val cmd: CmdT) : CmdOp<CmdT>()
@@ -33,8 +33,8 @@ internal data class UpdatePrime<ModelT, MsgT, CmdT, SubT>(
     val msg: MsgT?,
     val modelPrime: ModelT?,
     val cmdOps: List<CmdOp<CmdT>>,
-    val subsFromOtherContext: List<SubT>,
-    val msgsFromOtherContext: List<MsgT>
+    val msgsFromOtherContext: List<MsgT>,
+    val subsFromOtherContext: List<SubT>
 )
 
 private data class SubsState<ModelT, MsgT, CmdT, SubT>(
@@ -96,6 +96,9 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
             msgsFromOtherContext = emptyList()
         )
 
+    val logIdx = AtomicInteger(0)
+    fun getLogIdx() = logIdx.getAndIncrement()
+
     msgInput
         .serialize()
         .mergeWith(msgSubj)
@@ -110,10 +113,10 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                 val disposable = cmdDisposables[cmdId]
                 if (disposable == null) {
                     if (logIdNotFound) {
-                        Log.CmdIdNotFoundToCancel<ModelT, MsgT, CmdT, SubT>(cmdId).log()
+                        Log.CmdIdNotFoundToCancel<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdId).log()
                     }
                 } else {
-                    Log.CmdCancelled<ModelT, MsgT, CmdT, SubT>(cmdId).log()
+                    Log.CmdCancelled<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdId).log()
                     disposable.dispose()
                 }
             }
@@ -123,16 +126,17 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                     is CmdOp.Cancel -> cancelCmd(cmdOp.cmdId, logIdNotFound = true)
                     is CmdOp.Run -> {
                         cancelCmd(cmdOp.cmd.id, logIdNotFound = false)
-                        Log.CmdStarted<ModelT, MsgT, CmdT, SubT>(cmdOp.cmd).log()
+                        Log.CmdStarted<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdOp.cmd).log()
                         cmdDisposables[cmdOp.cmd.id] =
                             cmdToMaybe(cmdOp.cmd)
                                 .doOnSuccess {
-                                    Log.CmdEmission<ModelT, MsgT, CmdT, SubT>(cmdOp.cmd, it)
+                                    Log.CmdEmission<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdOp.cmd, it)
                                         .log()
                                 }
                                 .doOnSuccess(msgSubj::onNext)
                                 .doOnError { error: Throwable ->
                                     Log.CmdError<ModelT, MsgT, CmdT, SubT>(
+                                        getLogIdx(),
                                         cmdOp.cmd,
                                         error
                                     ).log()
@@ -163,6 +167,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                     .forEach { cmdDisposables.remove(it) }
             }
         }
+        .doOnNext { updatePrime -> updatePrime.msgsFromOtherContext.forEach(msgSubj::onNext) }
         .scan(SubsState<ModelT, MsgT, CmdT, SubT>()) { subsState, updatePrime ->
             val model = updatePrime.modelPrime ?: return@scan subsState
 
@@ -181,7 +186,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         .doOnNext { subsState ->
             val (updatePrime, subs, subsPrime) = subsState
 
-            buildLogUpdate(updatePrime!!, subsPrime).log()
+            buildLogUpdate(getLogIdx(), updatePrime!!, subsPrime).log()
 
             val subsDiffs = computeSubsDiff(old = subs, new = subsPrime)
             val msgObs = msgInput.mergeWith(msgSubj).hide()
@@ -194,18 +199,18 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                     is SubsDiffOp.Create ->
                         subToObservable(diff.sub, msgObs, modelObs)
                             .also {
-                                Log.SubscriptionStarted<ModelT, MsgT, CmdT, SubT>(diff.sub)
+                                Log.SubscriptionStarted<ModelT, MsgT, CmdT, SubT>(getLogIdx(), diff.sub)
                                     .log()
                             }
                             .doOnNext { msg ->
                                 Log.SubscriptionEmission<ModelT, MsgT, CmdT, SubT>(
-                                    diff.sub, msg
+                                    getLogIdx(), diff.sub, msg
                                 ).log()
                             }
                             .doOnNext(msgSubj::onNext)
                             .doOnError { error ->
                                 Log.SubscriptionError<ModelT, MsgT, CmdT, SubT>(
-                                    diff.sub, error
+                                    getLogIdx(), diff.sub, error
                                 ).log()
                                 SubscriptionError(diff.sub as Any, error)
                                     .let { subError ->
@@ -223,7 +228,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                             }
                     is SubsDiffOp.Dispose -> {
                         synchronized(subDisposables) {
-                            Log.SubscriptionCancelled<ModelT, MsgT, CmdT, SubT>(diff.sub)
+                            Log.SubscriptionCancelled<ModelT, MsgT, CmdT, SubT>(getLogIdx(), diff.sub)
                                 .log()
                             subDisposables[diff.sub.id]?.dispose()
                             subDisposables.remove(diff.sub.id)
@@ -240,41 +245,6 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
             subDisposables.values.forEach(Disposable::dispose)
             loggerDisposables.forEach(Disposable::dispose)
         }
-}
-
-fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> test(
-    update: UpdateF<ModelT, MsgT, CmdT, SubT>,
-    initModel: ModelT,
-    msgs: List<MsgT>
-): List<Step<ModelT, MsgT, CmdT, SubT>> {
-    val context = UpdateContext<ModelT, MsgT, CmdT, SubT>()
-    return Observable.fromIterable(msgs)
-        .scan(emptyList<Step<ModelT, MsgT, CmdT, SubT>>()) { acc, msg ->
-            val model =
-                when (acc.isEmpty()) {
-                    true -> initModel
-                    false -> acc.last().run { modelPrime ?: model }
-                }
-            val updatePrime = context.execute(update, model, msg)
-            val modelPrime = updatePrime.modelPrime
-            val cmdsStarted = updatePrime.cmdOps
-                .mapNotNull { it as? CmdOp.Run<CmdT> }
-                .map { it.cmd }
-            val cmdsCancelled = updatePrime.cmdOps
-                .mapNotNull { it as? CmdOp.Cancel<CmdT> }
-                .map { it.cmdId }
-            val step = Step(
-                model = model,
-                msg = msg,
-                modelPrime = modelPrime,
-                cmdsStarted = cmdsStarted,
-                cmdIdsCancelled = cmdsCancelled,
-                subs = emptyList<SubT>() // TODO Add subs to Step
-            )
-            acc + step
-        }
-        .blockingLast()
-        .toList()
 }
 
 private fun <SubT : Sub> computeSubsDiff(old: List<SubT>, new: List<SubT>): List<SubsDiffOp<SubT>> {
@@ -298,10 +268,12 @@ private fun <SubT : Sub> computeSubsDiff(old: List<SubT>, new: List<SubT>): List
 }
 
 private fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> buildLogUpdate(
+    index: Int,
     updatePrime: UpdatePrime<ModelT, MsgT, CmdT, SubT>,
     subs: List<SubT>
 ): Log.Update<ModelT, MsgT, CmdT, SubT> =
     Log.Update(
+        index = index,
         model = updatePrime.model,
         msg = updatePrime.msg,
         modelPrime = updatePrime.modelPrime,

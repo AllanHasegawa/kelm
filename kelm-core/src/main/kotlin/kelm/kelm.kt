@@ -26,8 +26,8 @@ abstract class Sub(open val id: String) {
 
 class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
-    private val subsFromOtherContext = mutableListOf<SubT>()
     private val msgsFromOtherContext = mutableListOf<MsgT>()
+    private val subsFromOtherContext = mutableListOf<SubT>()
 
     internal fun execute(
         f: UpdateF<ModelT, MsgT, CmdT, SubT>,
@@ -41,8 +41,8 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
             msg = msg,
             modelPrime = modelPrime,
             cmdOps = cmdOps.toList(),
-            subsFromOtherContext = subsFromOtherContext.toList(),
-            msgsFromOtherContext = msgsFromOtherContext.toList()
+            msgsFromOtherContext = msgsFromOtherContext.toList(),
+            subsFromOtherContext = subsFromOtherContext.toList()
         )
     }
 
@@ -54,12 +54,21 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         cancelCmd(this)
     }
 
+    operator fun List<CmdT>.unaryPlus() {
+        runCmds(this)
+    }
+
     fun cancelCmd(cmdId: String) {
         cmdOps.add(CmdOp.Cancel(cmdId))
     }
 
     fun runCmd(cmd: CmdT) {
         cmdOps.add(CmdOp.Run(cmd))
+    }
+
+    fun runCmds(cmds: List<CmdT>) {
+        cmds.map { CmdOp.Run(it) }
+            .let(cmdOps::addAll)
     }
 
     fun <OtherModelT, OtherMsgT, OtherCmdT : Cmd, OtherSubT : Sub> switchContext(
@@ -130,17 +139,11 @@ class SubContext<SubT : Sub> internal constructor() {
     }
 }
 
-data class Step<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
-    val model: ModelT,
-    val msg: MsgT,
-    val modelPrime: ModelT?,
-    val cmdsStarted: List<CmdT> = emptyList(),
-    val cmdIdsCancelled: List<String> = emptyList(),
-    val subs: List<SubT> = emptyList()
-)
-
 sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
+    abstract val index: Int
+
     data class Update<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
         val model: ModelT,
         val msg: MsgT?,
         val modelPrime: ModelT?,
@@ -149,36 +152,54 @@ sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
         val subs: List<SubT> = emptyList()
     ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class SubscriptionStarted<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class SubscriptionStarted<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val sub: Sub
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class SubscriptionCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val sub: Sub) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class SubscriptionCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val sub: Sub
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 
     data class SubscriptionError<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
         val sub: Sub,
         val error: Throwable
     ) : Log<ModelT, MsgT, CmdT, SubT>()
 
     data class SubscriptionEmission<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
         val sub: SubT,
         val msg: MsgT
     ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class CmdStarted<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class CmdStarted<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val cmd: Cmd
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class CmdCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmdId: String) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class CmdCancelled<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val cmdId: String
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class CmdEmission<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd, val msg: MsgT) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class CmdEmission<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val cmd: Cmd,
+        val msg: MsgT
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class CmdError<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmd: Cmd, val error: Throwable) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class CmdError<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val cmd: Cmd,
+        val error: Throwable
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 
-    data class CmdIdNotFoundToCancel<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(val cmdId: String) :
-        Log<ModelT, MsgT, CmdT, SubT>()
+    data class CmdIdNotFoundToCancel<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+        override val index: Int,
+        val cmdId: String
+    ) : Log<ModelT, MsgT, CmdT, SubT>()
 }
 
 object Kelm {
@@ -204,12 +225,12 @@ object Kelm {
             )
 
         final override fun errorToMsg(error: ExternalError): MsgT? = null
-        final override fun initCmds(): List<Nothing>? = null
+        final override fun initCmds(initModel: ModelT): List<Nothing>? = null
         final override fun SubContext<Nothing>.subscriptions(model: ModelT) = Unit
     }
 
     abstract class Element<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
-        open fun initCmds(): List<CmdT>? = null
+        open fun initCmds(initModel: ModelT): List<CmdT>? = null
 
         abstract fun UpdateContext<ModelT, MsgT, CmdT, SubT>.update(
             model: ModelT,
@@ -228,7 +249,7 @@ object Kelm {
         ) =
             build(
                 initModel = initModel,
-                initCmds = initCmds(),
+                initCmds = initCmds(initModel),
                 msgInput = msgInput,
                 cmdToMaybe = cmdToMaybe,
                 subToObservable = subToObs,

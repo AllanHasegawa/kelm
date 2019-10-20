@@ -1,12 +1,12 @@
-package kelm.sample.signUp
+package kelm.sample.signUp.registerPet
 
 import kelm.ExternalError
 import kelm.Kelm
 import kelm.SubContext
 import kelm.UpdateContext
-import kelm.sample.signUp.SignUpRegisterPetElement.Cmd
-import kelm.sample.signUp.SignUpRegisterPetElement.Model
-import kelm.sample.signUp.SignUpRegisterPetElement.Msg
+import kelm.sample.signUp.registerPet.SignUpRegisterPetElement.Cmd
+import kelm.sample.signUp.registerPet.SignUpRegisterPetElement.Model
+import kelm.sample.signUp.registerPet.SignUpRegisterPetElement.Msg
 
 object SignUpRegisterPetElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
     data class Model(
@@ -15,7 +15,7 @@ object SignUpRegisterPetElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         val petId: String?,
         val showErrorMessage: Boolean
     ) {
-        val showContinueButton = petId != null
+        val showContinueButton = petId != null || showErrorMessage
     }
 
 
@@ -24,8 +24,6 @@ object SignUpRegisterPetElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
         data class PetRegisterSuccessResponse(val petId: String) : Msg()
         data class PetRegisterError(val error: Throwable) : Msg()
-
-        object Retry : Msg()
     }
 
     sealed class Cmd : kelm.Cmd() {
@@ -35,6 +33,7 @@ object SignUpRegisterPetElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         ) : Cmd()
 
         data class FinishSuccess(val petId: String) : Cmd()
+        object FinishWithError : Cmd()
     }
 
     fun initModel(userId: String, petName: String) =
@@ -45,22 +44,20 @@ object SignUpRegisterPetElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
             showErrorMessage = false
         )
 
+    override fun initCmds(initModel: Model): List<Cmd>? = listOf(
+        Cmd.RegisterPet(userId = initModel.userId, petName = initModel.petName)
+    )
+
     override fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg): Model? =
         with(model) {
             when (msg) {
                 is Msg.PetRegisterSuccessResponse ->
                     model.copy(petId = msg.petId, showErrorMessage = false)
                 is Msg.PetRegisterError -> copy(showErrorMessage = true)
-                is Msg.Retry -> {
-                    +Cmd.RegisterPet(
-                        userId = model.userId,
-                        petName = model.petName
-                    )
-                    model.copy(showErrorMessage = false)
-                }
                 is Msg.Continue -> {
-                    if (model.petId != null) {
-                        +Cmd.FinishSuccess(model.petId)
+                    +when (model.petId) {
+                        null -> Cmd.FinishWithError
+                        else -> Cmd.FinishSuccess(model.petId)
                     }
                     null
                 }

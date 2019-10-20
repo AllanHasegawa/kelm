@@ -7,6 +7,9 @@ import kelm.UpdateContext
 import kelm.sample.signUp.SignUpElement.Cmd
 import kelm.sample.signUp.SignUpElement.Model
 import kelm.sample.signUp.SignUpElement.Msg
+import kelm.sample.signUp.form.SignUpFormElement
+import kelm.sample.signUp.registerDevice.SignUpRegisterDeviceElement
+import kelm.sample.signUp.registerPet.SignUpRegisterPetElement
 
 object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
@@ -37,6 +40,7 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
         data class FromRegPet(val it: SignUpRegisterPetElement.Msg) : Msg()
         data class RegPetFinishSuccess(val petId: String) : Msg()
+        object RegPetFinishError : Msg()
     }
 
     sealed class Cmd : kelm.Cmd() {
@@ -78,9 +82,14 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                                     SignUpRegisterDeviceElement.initModel(userId = msg.userId)
                                 )
                             }
+                            .also {
+                                +SignUpRegisterDeviceElement.initCmds(it.regDeviceModel)!!
+                                    .map(Cmd::FromRegDevice)
+                            }
 
                     else -> null
                 }
+
             is Model.RegisterDevice ->
                 when (msg) {
                     is Msg.FromRegDevice ->
@@ -107,7 +116,10 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                                     userId = model.regDeviceModel.userId,
                                     petName = model.petName
                                 )
-                            )
+                            ).also {
+                                +SignUpRegisterPetElement.initCmds(it.regPetModel)!!
+                                    .map(Cmd::FromPetDevice)
+                            }
                         }
                     else -> null
                 }
@@ -125,6 +137,8 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                                 when (cmd) {
                                     is SignUpRegisterPetElement.Cmd.FinishSuccess ->
                                         Msg.RegPetFinishSuccess(cmd.petId)
+                                    is SignUpRegisterPetElement.Cmd.FinishWithError ->
+                                        Msg.RegPetFinishError
                                     else -> null
                                 }
                             }
@@ -135,6 +149,10 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                             userId = model.regPetModel.userId,
                             petId = msg.petId
                         )
+
+                    is Msg.RegPetFinishError ->
+                        Model.AppMainScreen(userId = model.regPetModel.userId)
+
                     else -> null
                 }
 

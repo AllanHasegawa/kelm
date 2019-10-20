@@ -1,4 +1,4 @@
-package kelm.sample.signUp
+package kelm.sample.signUp.form
 
 import android.content.Context
 import android.util.AttributeSet
@@ -7,9 +7,8 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import kelm.sample.R
 import kelm.sample.SimpleTextWatcher
-import kelm.sample.signUp.SignUpFormElement.EmailError
-import kelm.sample.signUp.SignUpFormElement.PasswordError
-import kotlinx.android.synthetic.main.layout_sign_up_form.*
+import kelm.sample.signUp.form.SignUpFormElement.EmailError
+import kelm.sample.signUp.form.SignUpFormElement.PasswordError
 import kotlinx.android.synthetic.main.layout_sign_up_form.view.*
 
 class SignUpFormView @JvmOverloads constructor(

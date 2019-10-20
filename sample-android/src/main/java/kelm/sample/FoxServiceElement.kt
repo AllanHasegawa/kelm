@@ -34,7 +34,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
     fun initModel() = Model.Loading
 
     @ExperimentalTime
-    override fun initCmds(): List<Cmd>? = listOf(
+    override fun initCmds(initModel: Model): List<Cmd>? = listOf(
         Cmd.Fetch(500.toDuration(DurationUnit.MILLISECONDS))
     )
 
