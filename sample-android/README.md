@@ -2,4 +2,4 @@
 
 ## Advanced
 
-![Kelm Advanced Sample Flow](docs/kelm_adv_sample_flow.png)
+![Kelm Advanced Sample Flow](../docs/kelm_adv_sample_flow.png)
