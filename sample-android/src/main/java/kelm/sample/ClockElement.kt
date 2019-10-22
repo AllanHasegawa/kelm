@@ -9,16 +9,16 @@ import kelm.sample.ClockElement.Msg
 import kelm.sample.ClockElement.Sub
 
 object ClockElement : Kelm.Element<Model, Msg, Nothing, Sub>() {
-    sealed class Msg {
-        object ToggleRunPauseClock : Msg()
-        data class Tick(val instant: Long) : Msg()
-    }
-
     sealed class Model {
         object Paused : Model()
         data class Running(val instant: Long?) : Model()
 
         fun isRunning() = this is Running
+    }
+
+    sealed class Msg {
+        object ToggleRunPauseClock : Msg()
+        data class Tick(val instant: Long) : Msg()
     }
 
     sealed class Sub(id: String) : kelm.Sub(id) {
@@ -43,7 +43,7 @@ object ClockElement : Kelm.Element<Model, Msg, Nothing, Sub>() {
 
     override fun SubContext<Sub>.subscriptions(model: Model) {
         when (model.isRunning()) {
-            true -> runSub(Sub.ClockTickSub)
+            true -> +Sub.ClockTickSub
             false -> Unit // No-Op
         }
     }

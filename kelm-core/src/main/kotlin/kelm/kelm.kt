@@ -47,7 +47,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
     }
 
     operator fun CmdT.unaryPlus() {
-        runCmd(this)
+        startCmd(this)
     }
 
     operator fun String.unaryMinus() {
@@ -55,20 +55,24 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
     }
 
     operator fun List<CmdT>.unaryPlus() {
-        runCmds(this)
+        startCmds(this)
     }
 
     fun cancelCmd(cmdId: String) {
         cmdOps.add(CmdOp.Cancel(cmdId))
     }
 
-    fun runCmd(cmd: CmdT) {
-        cmdOps.add(CmdOp.Run(cmd))
+    fun startCmd(cmd: CmdT) {
+        cmdOps.add(CmdOp.Start(cmd))
     }
 
-    fun runCmds(cmds: List<CmdT>) {
-        cmds.map { CmdOp.Run(it) }
+    fun startCmds(cmds: List<CmdT>) {
+        cmds.map { CmdOp.Start(it) }
             .let(cmdOps::addAll)
+    }
+
+    fun startCmds(vararg cmds: CmdT) {
+        startCmds(cmds.toList())
     }
 
     fun <OtherModelT, OtherMsgT, OtherCmdT : Cmd, OtherSubT : Sub> switchContext(
@@ -88,14 +92,14 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         @Suppress("UNCHECKED_CAST")
         val cmds = otherUpdateContext.cmdOps.mapNotNull { otherCmdOp ->
             when (otherCmdOp) {
-                is CmdOp.Run -> {
+                is CmdOp.Start -> {
                     val msgMaybe = bypassOtherCmdToMsg(otherCmdOp.cmd)
                     if (msgMaybe != null) {
                         msgsFromOtherContext.add(msgMaybe)
                         return@mapNotNull null
                     }
                     val newCmd = otherCmdToCmd(otherCmdOp.cmd)
-                    CmdOp.Run(newCmd)
+                    CmdOp.Start(newCmd)
                 }
                 else -> otherCmdOp
             } as CmdOp<CmdT>
@@ -134,8 +138,28 @@ class SubContext<SubT : Sub> internal constructor() {
         return subs.toList()
     }
 
-    fun runSub(sub: SubT) {
+    fun retain(sub: SubT) {
         subs += sub
+    }
+
+    fun retain(subs: List<SubT>) {
+        subs.forEach(::retain)
+    }
+
+    operator fun SubT.unaryPlus() {
+        retain(this)
+    }
+
+    operator fun List<SubT>.unaryPlus() {
+        retain(this)
+    }
+
+    fun SubT.retainSub() {
+        retain(this)
+    }
+
+    fun List<SubT>.retainSubs() {
+        map(::retain)
     }
 }
 

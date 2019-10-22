@@ -58,9 +58,9 @@ object SignUpFormElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
     fun initModel(idempotencyKey: String): Model =
         Model(
-            email = "h@h.c",
+            email = "epic.email@example.com",
             emailError = null,
-            password = "123456",
+            password = "hunter42",
             passwordError = null,
             showPetNameInput = false,
             petName = null,

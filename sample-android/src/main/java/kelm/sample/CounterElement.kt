@@ -5,15 +5,15 @@ import kelm.sample.CounterElement.Model
 import kelm.sample.CounterElement.Msg
 
 object CounterElement : Kelm.Sandbox<Model, Msg>() {
+    data class Model(val count: Int) {
+        val resetBtEnabled = count > 0
+        val minusBtEnabled = resetBtEnabled
+    }
+
     sealed class Msg {
         object MinusClick : Msg()
         object PlusClick : Msg()
         object ResetClick : Msg()
-    }
-
-    data class Model(val count: Int) {
-        val resetBtEnabled = count > 0
-        val minusBtEnabled = resetBtEnabled
     }
 
     fun initModel() = Model(count = 0)

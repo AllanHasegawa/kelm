@@ -60,7 +60,7 @@ object KelmTest : Spek({
         fun SubContext<Sub>.subscriptions(model: Model) {
             when (model.count) {
                 in 10..Int.MAX_VALUE ->
-                    runSub(Sub())
+                    retain(Sub())
             }
         }
 

@@ -45,7 +45,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                 when (msg) {
                     is Msg.GotFoxPicUrl -> Model.ContentLoaded(foxPicUrl = msg.url)
                     is Msg.ConnError -> Model.ConnError
-                    else -> model
+                    else -> null
                 }
 
             is Model.ConnError ->

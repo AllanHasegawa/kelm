@@ -24,7 +24,7 @@ import kelm.toOptional
 import java.util.concurrent.atomic.AtomicInteger
 
 internal sealed class CmdOp<CmdT> {
-    data class Run<CmdT>(val cmd: CmdT) : CmdOp<CmdT>()
+    data class Start<CmdT>(val cmd: CmdT) : CmdOp<CmdT>()
     data class Cancel<CmdT>(val cmdId: String) : CmdOp<CmdT>()
 }
 
@@ -80,7 +80,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         if (loggerDisposables.size > 30) loggerDisposables.removeAll { it.isDisposed }
     }
 
-    val initCmdOps = initCmds?.map { cmd -> CmdOp.Run(cmd) }
+    val initCmdOps = initCmds?.map { cmd -> CmdOp.Start(cmd) }
         ?: emptyList()
 
     val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
@@ -124,7 +124,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
             fun processCmdOp(cmdOp: CmdOp<CmdT>) {
                 when (cmdOp) {
                     is CmdOp.Cancel -> cancelCmd(cmdOp.cmdId, logIdNotFound = true)
-                    is CmdOp.Run -> {
+                    is CmdOp.Start -> {
                         cancelCmd(cmdOp.cmd.id, logIdNotFound = false)
                         Log.CmdStarted<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdOp.cmd).log()
                         cmdDisposables[cmdOp.cmd.id] =
@@ -278,7 +278,7 @@ private fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> buildLogUpdate(
         msg = updatePrime.msg,
         modelPrime = updatePrime.modelPrime,
         cmdsStarted = updatePrime.cmdOps
-            .filterIsInstance<CmdOp.Run<CmdT>>()
+            .filterIsInstance<CmdOp.Start<CmdT>>()
             .map { it.cmd },
         cmdIdsCancelled = updatePrime.cmdOps
             .filterIsInstance<CmdOp.Cancel<CmdT>>()

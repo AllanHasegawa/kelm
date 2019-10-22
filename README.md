@@ -18,8 +18,6 @@ The **Model** can only be updated in the **Update** function. **Messages** are t
 
 **Messages** can be UI events, responses from APIs, or the result of computations.
 
-A good strategy when designing the initial version of a **Model** and **Messages** is to write down every event the UI can generate and everything it can render.
-
 ### A simple example
 
 Below is a simple Kelm app. Try to read and guess what it does:
@@ -62,7 +60,7 @@ msgSubj.onNext(Msg.Decrement)
 ``` 
 
 The above example shows how the main flow of a Kelm app works.
-We first declare an **Sandbox** object†, the contract for our **Model** and our **Messages**,
+We first declare a `Kelm.Sandbox` object†, the contract for our **Model** and our **Messages**,
 and how they interact with the **update** function. 
 
 † Your **Sandbox** implementation should be an **object** with no properties.
@@ -72,7 +70,7 @@ The **Update** is a *pure function* that takes the current **Model** and a **Mes
 The return of the `Element::start` is of type `Observable<Model>`.
 The **View** (an Android View, for example) can subscribe to this `Observable` and render it when it changes.
 
-See the [Counter Sample](sample-android/src/main/java/kelm/sample/CounterSampleActivity.kt) for a working implementation.
+See the [Counter Sample](sample-android/src/main/java/kelm/sample/CounterSampleActivity.kt).
 
 #### Rules for the **Update** function:
 
@@ -88,7 +86,6 @@ This **Message** indicates the result of a task, be it a successful result
 or an error.
 
 * All side-effects and expensive computations must be done with **Commands**.
-
 
 To work with **Commands** implement an ``Kelm::Element`` instead of a ``Kelm::Sandbox``.
 
@@ -108,6 +105,10 @@ TODO
 See the [Clock Sample](sample-android/src/main/java/kelm/sample/ClockSampleActivity.kt).
 
 ### Dealing with complex projects
+
+```
+TODO
+```
 
 See the [Advanced Sample](sample-android/src/main/java/kelm/sample/signUp).
 
