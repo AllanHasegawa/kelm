@@ -46,7 +46,8 @@ object BElement : Kelm.Sandbox<BElement.Model, BElement.Msg>() {
         model.copy(count = model.count - msg.dec)
 }
 
-object ParentElement : Kelm.Element<ParentElement.Model, ParentElement.Msg, ParentElement.Cmd, Nothing>() {
+object ParentElement :
+    Kelm.Element<ParentElement.Model, ParentElement.Msg, ParentElement.Cmd, Nothing>() {
     data class Model(
         val a: AElement.Model?,
         val b: BElement.Model?
@@ -66,22 +67,32 @@ object ParentElement : Kelm.Element<ParentElement.Model, ParentElement.Msg, Pare
         msg: Msg
     ): Model? =
         when (model.a) {
-            null -> null
-            else ->
+            is AElement.Model ->
                 when (msg) {
                     is Msg.ForA ->
                         switchContext(
                             otherElement = AElement,
                             otherModel = model.a,
                             otherMsg = msg.msg,
-                            otherCmdToCmd = { Cmd }, // TODO return an either type for CMD or Msg!
-                            otherSubToSub = { it },
-                            bypassOtherCmdToMsg = {
-                                when (it) {
-                                    is AElement.Cmd.GoToB -> Msg.GoToB
+                            otherCmdToMsgOrCmd = { otherCmd ->
+                                when (otherCmd) {
+                                    is AElement.Cmd.GoToB -> Msg.GoToB.ret()
                                 }
-                            }
+                            },
+                            otherSubToSub = { it }
                         )?.let { model.copy(a = it) }
+                    else -> null
+                }
+            null ->
+                when (msg) {
+                    is Msg.ForB ->
+                        switchContext(
+                            otherElement = BElement,
+                            otherModel = model.b!!,
+                            otherMsg = msg.msg,
+                            otherCmdToMsgOrCmd = { error("BElement has no CMD") },
+                            otherSubToSub = { it }
+                        )?.let { model.copy(b = it) }
                     else -> null
                 }
         }
@@ -132,23 +143,23 @@ object ParentElement : Kelm.Element<ParentElement.Model, ParentElement.Msg, Pare
 //tolist    )
 
 object KelmContextSwitchTest : Spek({
-    //    group("Given a model with two contexts") {
-//        test("whenever a msg comes for A, update the corresponding model") {
-//            val (model, cmds) = steps(
-//                Msg.ForA(MsgA(10))
-//            ).last().let { it.modelPrime!! to it.cmdsStarted }
-//
-//            model.a shouldBe ModelA(10)
-//            cmds.shouldBeEmpty()
-//        }
-//
-//        test("whenever A tries to switch to B, then the CMD should be sent") {
-//            val (model, cmds) = steps(
-//                Msg.ForA(MsgA(51))
-//            ).last().let { it.modelPrime!! to it.cmdsStarted }
-//
-//            model.a shouldBe ModelA(0)
-//            cmds shouldContain Cmd.GoToB
-//        }
-//    }
+        group("Given a model with two contexts") {
+        test("whenever a msg comes for A, update the corresponding model") {
+            val (model, cmds) = steps(
+                Msg.ForA(MsgA(10))
+            ).last().let { it.modelPrime!! to it.cmdsStarted }
+
+            model.a shouldBe ModelA(10)
+            cmds.shouldBeEmpty()
+        }
+
+        test("whenever A tries to switch to B, then the CMD should be sent") {
+            val (model, cmds) = steps(
+                Msg.ForA(MsgA(51))
+            ).last().let { it.modelPrime!! to it.cmdsStarted }
+
+            model.a shouldBe ModelA(0)
+            cmds shouldContain Cmd.GoToB
+        }
+    }
 })

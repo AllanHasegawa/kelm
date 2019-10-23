@@ -2,6 +2,7 @@ package kelm.sample.signUp
 
 import kelm.ExternalError
 import kelm.Kelm
+import kelm.MsgOrCmd
 import kelm.SubContext
 import kelm.UpdateContext
 import kelm.sample.signUp.SignUpElement.Cmd
@@ -62,15 +63,14 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                             otherElement = SignUpFormElement,
                             otherModel = model.formModel,
                             otherMsg = msg.it,
-                            otherCmdToCmd = Cmd::FromForm,
-                            otherSubToSub = { it },
-                            bypassOtherCmdToMsg = { cmd ->
-                                when (cmd) {
+                            otherCmdToMsgOrCmd = { otherCmd ->
+                                when (otherCmd) {
                                     is SignUpFormElement.Cmd.FinishSuccess ->
-                                        Msg.FormFinishSuccess(cmd.userId, cmd.petName)
-                                    else -> null
+                                        Msg.FormFinishSuccess(otherCmd.userId, otherCmd.petName).ret()
+                                    else -> Cmd.FromForm(otherCmd).ret()
                                 }
-                            }
+                            },
+                            otherSubToSub = { it }
                         )?.let(Model::FormVisible)
 
                     is Msg.FormFinishSuccess ->
@@ -97,15 +97,14 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                             otherElement = SignUpRegisterDeviceElement,
                             otherModel = model.regDeviceModel,
                             otherMsg = msg.it,
-                            otherCmdToCmd = Cmd::FromRegDevice,
-                            otherSubToSub = { it },
-                            bypassOtherCmdToMsg = { cmd ->
-                                when (cmd) {
+                            otherCmdToMsgOrCmd = { otherCmd ->
+                                when (otherCmd) {
                                     is SignUpRegisterDeviceElement.Cmd.FinishSuccess ->
-                                        Msg.RegDeviceFinishSuccess
-                                    else -> null
+                                        Msg.RegDeviceFinishSuccess.ret()
+                                    else -> Cmd.FromRegDevice(otherCmd).ret()
                                 }
-                            }
+                            },
+                            otherSubToSub = { it }
                         )?.let { model.copy(regDeviceModel = it) }
 
                     is Msg.RegDeviceFinishSuccess ->
@@ -131,17 +130,16 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
                             otherElement = SignUpRegisterPetElement,
                             otherModel = model.regPetModel,
                             otherMsg = msg.it,
-                            otherCmdToCmd = Cmd::FromPetDevice,
-                            otherSubToSub = { it },
-                            bypassOtherCmdToMsg = { cmd ->
-                                when (cmd) {
+                            otherCmdToMsgOrCmd = { otherCmd ->
+                                when (otherCmd) {
                                     is SignUpRegisterPetElement.Cmd.FinishSuccess ->
-                                        Msg.RegPetFinishSuccess(cmd.petId)
+                                        Msg.RegPetFinishSuccess(otherCmd.petId).ret()
                                     is SignUpRegisterPetElement.Cmd.FinishWithError ->
-                                        Msg.RegPetFinishError
-                                    else -> null
+                                        Msg.RegPetFinishError.ret()
+                                    else -> Cmd.FromPetDevice(otherCmd).ret()
                                 }
-                            }
+                            },
+                            otherSubToSub = { it }
                         )?.let { model.copy(regPetModel = it) }
 
                     is Msg.RegPetFinishSuccess ->

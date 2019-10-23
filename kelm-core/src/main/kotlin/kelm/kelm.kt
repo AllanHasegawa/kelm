@@ -30,9 +30,18 @@ sealed class MsgOrCmd<out MsgT, out CmdT : Cmd> {
 }
 
 class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor() {
+    companion object {
+        internal val msgOrCmdContext = MsgOrCmdContext<Any, Cmd>()
+    }
+
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
     private val msgsFromOtherContext = mutableListOf<MsgT>()
     private val subsFromOtherContext = mutableListOf<SubT>()
+
+    class MsgOrCmdContext<MsgT, CmdT : Cmd> {
+        fun MsgT.ret() = MsgOrCmd.Msg(this)
+        fun CmdT.ret() = MsgOrCmd.Cmd(this)
+    }
 
     internal fun execute(
         f: UpdateF<ModelT, MsgT, CmdT, SubT>,
@@ -84,9 +93,8 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         otherElement: Kelm.Element<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>,
         otherModel: OtherModelT,
         otherMsg: OtherMsgT,
-        otherCmdToCmd: (OtherCmdT) -> CmdT, // TODO DSL for the either type
-        otherSubToSub: (OtherSubT) -> SubT,
-        bypassOtherCmdToMsg: (OtherCmdT) -> MsgT? = { null }
+        otherCmdToMsgOrCmd: MsgOrCmdContext<MsgT, CmdT>.(OtherCmdT) -> MsgOrCmd<MsgT, CmdT>,
+        otherSubToSub: (OtherSubT) -> SubT
     ): OtherModelT? {
         val otherUpdateContext = UpdateContext<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>()
         val otherUpdatePrime = with(otherElement) {
@@ -98,13 +106,17 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         val cmds = otherUpdateContext.cmdOps.mapNotNull { otherCmdOp ->
             when (otherCmdOp) {
                 is CmdOp.Start -> {
-                    val msgMaybe = bypassOtherCmdToMsg(otherCmdOp.cmd)
-                    if (msgMaybe != null) {
-                        msgsFromOtherContext.add(msgMaybe)
-                        return@mapNotNull null
+                    val msgOrCmd = otherCmdToMsgOrCmd(
+                        msgOrCmdContext as MsgOrCmdContext<MsgT, CmdT>,
+                        otherCmdOp.cmd
+                    )
+                    when (msgOrCmd) {
+                        is MsgOrCmd.Msg -> {
+                            msgsFromOtherContext.add(msgOrCmd.value)
+                            return@mapNotNull null
+                        }
+                        is MsgOrCmd.Cmd -> CmdOp.Start(msgOrCmd.value)
                     }
-                    val newCmd = otherCmdToCmd(otherCmdOp.cmd)
-                    CmdOp.Start(newCmd)
                 }
                 else -> otherCmdOp
             } as CmdOp<CmdT>
