@@ -24,6 +24,11 @@ abstract class Sub(open val id: String) {
     companion object
 }
 
+sealed class MsgOrCmd<out MsgT, out CmdT : Cmd> {
+    data class Msg<out MsgT>(val value: MsgT) : MsgOrCmd<MsgT, Nothing>()
+    data class Cmd<out CmdT : kelm.Cmd>(val value: CmdT) : MsgOrCmd<Nothing, CmdT>()
+}
+
 class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor() {
     private val cmdOps = mutableListOf<CmdOp<CmdT>>()
     private val msgsFromOtherContext = mutableListOf<MsgT>()
@@ -79,7 +84,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         otherElement: Kelm.Element<OtherModelT, OtherMsgT, OtherCmdT, OtherSubT>,
         otherModel: OtherModelT,
         otherMsg: OtherMsgT,
-        otherCmdToCmd: (OtherCmdT) -> CmdT,
+        otherCmdToCmd: (OtherCmdT) -> CmdT, // TODO DSL for the either type
         otherSubToSub: (OtherSubT) -> SubT,
         bypassOtherCmdToMsg: (OtherCmdT) -> MsgT? = { null }
     ): OtherModelT? {
