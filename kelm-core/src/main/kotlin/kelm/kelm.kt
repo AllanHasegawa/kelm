@@ -34,7 +34,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         internal val msgOrCmdContext = MsgOrCmdContext<Any, Cmd>()
     }
 
-    private val cmdOps = mutableListOf<CmdOp<CmdT>>()
+    internal val cmdOps = mutableListOf<CmdOp<CmdT>>()
     private val msgsFromOtherContext = mutableListOf<MsgT>()
     private val subsFromOtherContext = mutableListOf<SubT>()
 
@@ -241,6 +241,26 @@ sealed class Log<ModelT, MsgT, CmdT : Cmd, SubT : Sub> {
         override val index: Int,
         val cmdId: String
     ) : Log<ModelT, MsgT, CmdT, SubT>()
+}
+
+class TestEnvironment<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
+    val element: Kelm.Element<ModelT, MsgT, CmdT, SubT>,
+    val initModel: ModelT
+) {
+    private var model = initModel
+
+    fun step(vararg msgs: MsgT): Log.Update<ModelT, MsgT, CmdT, SubT> {
+        val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
+        msgs.forEach { msg ->
+            with(element) {
+                with(updateContext) {
+                    update(model, msg)
+                }
+            }
+//            updateContext.
+        }
+        error("Not implemented yet")
+    }
 }
 
 object Kelm {
