@@ -143,7 +143,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
 
 class SubContext<SubT : Sub> internal constructor() {
 
-    private val subs = mutableListOf<SubT>()
+    internal val subs = mutableListOf<SubT>()
 
     internal fun <ModelT> execute(
         f: SubContext<SubT>.(ModelT) -> Unit,
@@ -247,19 +247,75 @@ class TestEnvironment<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
     val element: Kelm.Element<ModelT, MsgT, CmdT, SubT>,
     val initModel: ModelT
 ) {
-    private var model = initModel
+    val history: List<Log.Update<ModelT, MsgT, CmdT, SubT>>
+        get() = steps.toList()
+
+    private val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
+    private val subContext = SubContext<SubT>()
+    private val steps = mutableListOf<Log.Update<ModelT, MsgT, CmdT, SubT>>()
 
     fun step(vararg msgs: MsgT): Log.Update<ModelT, MsgT, CmdT, SubT> {
-        val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
-        msgs.forEach { msg ->
-            with(element) {
-                with(updateContext) {
-                    update(model, msg)
+        require(msgs.isNotEmpty()) { "msgs should not be empty" }
+
+        data class History(
+            val lastOne: Log.Update<ModelT, MsgT, CmdT, SubT>,
+            val history: List<Log.Update<ModelT, MsgT, CmdT, SubT>>
+        )
+
+        fun Log.Update<ModelT, MsgT, CmdT, SubT>.lastModel() = modelPrime ?: model
+
+        val startUpdate =
+            steps.lastOrNull()
+                ?: run {
+                    val startCmds = element.initCmds(initModel)
+                        ?: emptyList()
+
+                    Log.Update<ModelT, MsgT, CmdT, SubT>(
+                        index = 0,
+                        model = initModel,
+                        msg = null,
+                        modelPrime = initModel,
+                        cmdsStarted = startCmds,
+                        cmdIdsCancelled = emptyList()
+                    )
                 }
+
+        val history = msgs
+            .fold(History(startUpdate, history = listOf(startUpdate))) { (update, history), msg ->
+                val model = update.lastModel()
+
+                val modelPrime = with(element) {
+                    with(subContext) {
+                        subscriptions(model)
+                    }
+                    with(updateContext) {
+                        update(model, msg)
+                    }
+                }
+
+                val updatePrime = Log.Update(
+                    index = update.index + 1,
+                    model = model,
+                    msg = msg,
+                    modelPrime = modelPrime,
+                    cmdsStarted = updateContext.cmdOps
+                        .mapNotNull { (it as? CmdOp.Start<CmdT>)?.cmd },
+                    cmdIdsCancelled = updateContext.cmdOps
+                        .mapNotNull { (it as? CmdOp.Cancel)?.cmdId },
+                    subs = subContext.subs
+                )
+                History(updatePrime, history + updatePrime)
             }
-//            updateContext.
+
+        val lastUpdate = history.lastOne
+        val newSteps = if (steps.isEmpty()) {
+            history.history
+        } else {
+            history.history.drop(1)
         }
-        error("Not implemented yet")
+        steps.addAll(newSteps)
+
+        return lastUpdate
     }
 }
 
@@ -319,5 +375,7 @@ object Kelm {
                 logger = logger,
                 update = { model: ModelT, msg: MsgT -> update(model, msg) }
             )
+
+        fun test(initModel: ModelT) = TestEnvironment(this, initModel)
     }
 }

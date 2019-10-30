@@ -24,6 +24,7 @@ private sealed class SubSubBug(id: String) : kelm.Sub(id) {
     object C : SubSubBug("sub-c")
 }
 
+/*
 class SubFirstBugTest : Spek({
     repeat(1000) {
         group("Given a sub sends msgs right at its start, then all msgs should be handled") {
@@ -71,3 +72,5 @@ class SubFirstBugTest : Spek({
         }
     }
 })
+
+ */

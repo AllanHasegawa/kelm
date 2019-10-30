@@ -1,3 +1,6 @@
+import io.kotlintest.matchers.collections.shouldBeEmpty
+import io.kotlintest.matchers.collections.shouldContain
+import io.kotlintest.shouldBe
 import kelm.ExternalError
 import kelm.Kelm
 import kelm.SubContext
@@ -81,6 +84,11 @@ object ParentElement :
                             },
                             otherSubToSub = { it }
                         )?.let { model.copy(a = it) }
+                    is Msg.GoToB ->
+                        Model(
+                            a = null,
+                            b = BElement.Model(0)
+                        )
                     else -> null
                 }
             null ->
@@ -144,23 +152,32 @@ object ParentElement :
 //tolist    )
 
 object KelmContextSwitchTest : Spek({
-        group("Given a model with two contexts") {
+    group("Given a model with two contexts") {
+        val model = ParentElement.Model(a = AElement.Model(count = 0), b = null)
+
         test("whenever a msg comes for A, update the corresponding model") {
-//            val (model, cmds) = steps(
-//                Msg.ForA(MsgA(10))
-//            ).last().let { it.modelPrime!! to it.cmdsStarted }
-//
-//            model.a shouldBe ModelA(10)
-//            cmds.shouldBeEmpty()
+            val (newModel, cmdsStarted) = ParentElement
+                .test(model)
+                .step(
+                    ParentElement.Msg.ForA(AElement.Msg(10))
+                )
+                .let { it.modelPrime !! to it.cmdsStarted }
+
+            newModel.a shouldBe AElement.Model(10)
+            cmdsStarted.shouldBeEmpty()
         }
 
         test("whenever A tries to switch to B, then the CMD should be sent") {
-//            val (model, cmds) = steps(
-//                Msg.ForA(MsgA(51))
-//            ).last().let { it.modelPrime!! to it.cmdsStarted }
-//
-//            model.a shouldBe ModelA(0)
-//            cmds shouldContain Cmd.GoToB
+            val (newModel, cmdsStarted) = ParentElement
+                .test(model)
+                .step(
+                    ParentElement.Msg.ForA(AElement.Msg(51))
+                )
+                .let { it.modelPrime !! to it.cmdsStarted }
+
+            newModel.a shouldBe null
+            newModel.b shouldBe BElement.Model(0)
+            cmdsStarted.shouldBeEmpty()
         }
     }
 })
