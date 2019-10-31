@@ -18,7 +18,6 @@ object SignUpRegisterPetElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         val showContinueButton = petId != null || showErrorMessage
     }
 
-
     sealed class Msg {
         object Continue : Msg()
 

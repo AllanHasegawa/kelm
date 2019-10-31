@@ -33,4 +33,3 @@ class SignUpRegisterPetView @JvmOverloads constructor(
         }
     }
 }
-
