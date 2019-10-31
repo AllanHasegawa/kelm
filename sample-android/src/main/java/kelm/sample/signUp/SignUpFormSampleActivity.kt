@@ -23,6 +23,10 @@ class SignUpFormSampleActivity : AppCompatActivity() {
 
     private var lastViewConstructorUsed: KFunction<*>? = null
 
+    /**
+     * I'm using custom views to change between screens, but it can work
+     * with any other navigation system, like the Navigation Component from Jetpack.
+     */
     private val modelToViewConstructor = mapOf(
         Model.FormVisible::class to ::SignUpFormView,
         Model.RegisterDevice::class to ::SignUpRegisterDeviceView,

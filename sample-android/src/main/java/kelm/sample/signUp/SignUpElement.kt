@@ -14,19 +14,14 @@ import kelm.sample.signUp.registerPet.SignUpRegisterPetElement
 object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
     sealed class Model {
-        data class FormVisible(
-            val formModel: SignUpFormElement.Model
-        ) : Model()
+        data class FormVisible(val formModel: SignUpFormElement.Model) : Model()
 
         data class RegisterDevice(
             val petName: String?,
             val regDeviceModel: SignUpRegisterDeviceElement.Model
         ) : Model()
 
-        data class RegisterPet(
-            val regPetModel: SignUpRegisterPetElement.Model
-        ) : Model()
-
+        data class RegisterPet(val regPetModel: SignUpRegisterPetElement.Model) : Model()
         data class AppMainScreen(val userId: String) : Model()
         data class PetScreen(val userId: String, val petId: String) : Model()
     }
@@ -57,21 +52,7 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         when (model) {
             is Model.FormVisible ->
                 when (msg) {
-                    is Msg.FromForm ->
-                        switchContext(
-                            otherElement = SignUpFormElement,
-                            otherModel = model.formModel,
-                            otherMsg = msg.it,
-                            otherCmdToMsgOrCmd = { otherCmd ->
-                                when (otherCmd) {
-                                    is SignUpFormElement.Cmd.FinishSuccess ->
-                                        Msg.FormFinishSuccess(otherCmd.userId, otherCmd.petName).ret()
-                                    else -> Cmd.FromForm(otherCmd).ret()
-                                }
-                            },
-                            otherSubToSub = { it }
-                        )?.let(Model::FormVisible)
-
+                    is Msg.FromForm -> updateFormModel(model, msg)
                     is Msg.FormFinishSuccess ->
                         SignUpRegisterDeviceElement.initModel(userId = msg.userId)
                             .let {
@@ -91,21 +72,7 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
             is Model.RegisterDevice ->
                 when (msg) {
-                    is Msg.FromRegDevice ->
-                        switchContext(
-                            otherElement = SignUpRegisterDeviceElement,
-                            otherModel = model.regDeviceModel,
-                            otherMsg = msg.it,
-                            otherCmdToMsgOrCmd = { otherCmd ->
-                                when (otherCmd) {
-                                    is SignUpRegisterDeviceElement.Cmd.FinishSuccess ->
-                                        Msg.RegDeviceFinishSuccess.ret()
-                                    else -> Cmd.FromRegDevice(otherCmd).ret()
-                                }
-                            },
-                            otherSubToSub = { it }
-                        )?.let { model.copy(regDeviceModel = it) }
-
+                    is Msg.FromRegDevice -> updateRegDeviceModel(model, msg)
                     is Msg.RegDeviceFinishSuccess ->
                         when (model.petName) {
                             null -> Model.AppMainScreen(userId = model.regDeviceModel.userId)
@@ -124,23 +91,7 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
             is Model.RegisterPet ->
                 when (msg) {
-                    is Msg.FromRegPet ->
-                        switchContext(
-                            otherElement = SignUpRegisterPetElement,
-                            otherModel = model.regPetModel,
-                            otherMsg = msg.it,
-                            otherCmdToMsgOrCmd = { otherCmd ->
-                                when (otherCmd) {
-                                    is SignUpRegisterPetElement.Cmd.FinishSuccess ->
-                                        Msg.RegPetFinishSuccess(otherCmd.petId).ret()
-                                    is SignUpRegisterPetElement.Cmd.FinishWithError ->
-                                        Msg.RegPetFinishError.ret()
-                                    else -> Cmd.FromPetDevice(otherCmd).ret()
-                                }
-                            },
-                            otherSubToSub = { it }
-                        )?.let { model.copy(regPetModel = it) }
-
+                    is Msg.FromRegPet -> updateRegPetModel(model, msg)
                     is Msg.RegPetFinishSuccess ->
                         Model.PetScreen(
                             userId = model.regPetModel.userId,
@@ -156,6 +107,65 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
             is Model.AppMainScreen,
             is Model.PetScreen -> null
         }
+
+    private fun UpdateContext<Model, Msg, Cmd, Nothing>.updateFormModel(
+        model: Model.FormVisible,
+        msg: Msg.FromForm
+    ): Model? =
+        switchContext(
+            otherElement = SignUpFormElement,
+            otherModel = model.formModel,
+            otherMsg = msg.it,
+            otherCmdToMsgOrCmd = { otherCmd ->
+                when (otherCmd) {
+                    is SignUpFormElement.Cmd.FinishSuccess ->
+                        Msg.FormFinishSuccess(
+                            otherCmd.userId,
+                            otherCmd.petName
+                        ).ret()
+                    else -> Cmd.FromForm(otherCmd).ret()
+                }
+            },
+            otherSubToSub = { it }
+        )?.let(Model::FormVisible)
+
+    private fun UpdateContext<Model, Msg, Cmd, Nothing>.updateRegDeviceModel(
+        model: Model.RegisterDevice,
+        msg: Msg.FromRegDevice
+    ): Model? =
+        switchContext(
+            otherElement = SignUpRegisterDeviceElement,
+            otherModel = model.regDeviceModel,
+            otherMsg = msg.it,
+            otherCmdToMsgOrCmd = { otherCmd ->
+                when (otherCmd) {
+                    is SignUpRegisterDeviceElement.Cmd.FinishSuccess ->
+                        Msg.RegDeviceFinishSuccess.ret()
+                    else -> Cmd.FromRegDevice(otherCmd).ret()
+                }
+            },
+            otherSubToSub = { it }
+        )?.let { model.copy(regDeviceModel = it) }
+
+    private fun UpdateContext<Model, Msg, Cmd, Nothing>.updateRegPetModel(
+        model: Model.RegisterPet,
+        msg: Msg.FromRegPet
+    ): Model? =
+        switchContext(
+            otherElement = SignUpRegisterPetElement,
+            otherModel = model.regPetModel,
+            otherMsg = msg.it,
+            otherCmdToMsgOrCmd = { otherCmd ->
+                when (otherCmd) {
+                    is SignUpRegisterPetElement.Cmd.FinishSuccess ->
+                        Msg.RegPetFinishSuccess(otherCmd.petId).ret()
+                    is SignUpRegisterPetElement.Cmd.FinishWithError ->
+                        Msg.RegPetFinishError.ret()
+                    else -> Cmd.FromPetDevice(otherCmd).ret()
+                }
+            },
+            otherSubToSub = { it }
+        )?.let { model.copy(regPetModel = it) }
 
     override fun SubContext<Nothing>.subscriptions(model: Model) = Unit
     override fun errorToMsg(error: ExternalException): Msg? = null

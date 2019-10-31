@@ -8,8 +8,9 @@ import kelm.sample.FoxServiceElement.Cmd
 import kelm.sample.FoxServiceElement.Model
 import kelm.sample.FoxServiceElement.Msg
 import java.net.URL
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration
-import kotlin.time.DurationUnit
 import kotlin.time.ExperimentalTime
 import kotlin.time.toDuration
 
@@ -35,7 +36,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
     @ExperimentalTime
     override fun initCmds(initModel: Model): List<Cmd>? = listOf(
-        Cmd.Fetch(500.toDuration(DurationUnit.MILLISECONDS))
+        Cmd.Fetch(500.toDuration(MILLISECONDS))
     )
 
     @ExperimentalTime
@@ -51,7 +52,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
             is Model.ConnError ->
                 when (msg) {
                     is Msg.Fetch -> Model.Loading.also {
-                        +Cmd.Fetch(1.toDuration(DurationUnit.SECONDS))
+                        +Cmd.Fetch(1.toDuration(SECONDS))
                     }
                     is Msg.GotFoxPicUrl -> Model.ContentLoaded(foxPicUrl = msg.url)
                     else -> null
@@ -60,7 +61,7 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
             is Model.ContentLoaded ->
                 when (msg) {
                     is Msg.Fetch -> Model.Loading.also {
-                        +Cmd.Fetch(1.toDuration(DurationUnit.SECONDS))
+                        +Cmd.Fetch(1.toDuration(SECONDS))
                     }
                     else -> null
                 }
