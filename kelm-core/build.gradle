@@ -26,6 +26,8 @@ test {
     testLogging {
         events("passed", "skipped", "failed")
     }
+
+    systemProperty 'SPEK_TIMEOUT', 0
 }
 
 group = 'com.github.AllanHasegawa.kelm'

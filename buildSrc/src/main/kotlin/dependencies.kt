@@ -1,6 +1,6 @@
 private object Versions {
     const val kotlin = "1.3.50"
-    const val spek = "2.0.7"
+    const val spek = "2.0.8"
 }
 
 object Dep {

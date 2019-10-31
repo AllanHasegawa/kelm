@@ -1,6 +1,6 @@
 package kelm.sample
 
-import kelm.ExternalError
+import kelm.ExternalException
 import kelm.Kelm
 import kelm.SubContext
 import kelm.UpdateContext
@@ -68,5 +68,5 @@ object FoxServiceElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
 
     override fun SubContext<Nothing>.subscriptions(model: Model) {}
 
-    override fun errorToMsg(error: ExternalError): Msg? = null
+    override fun errorToMsg(error: ExternalException): Msg? = null
 }

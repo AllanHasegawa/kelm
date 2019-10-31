@@ -7,16 +7,16 @@ import io.reactivex.subjects.BehaviorSubject
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.ReplaySubject
 import kelm.Cmd
-import kelm.CmdError
+import kelm.CmdException
 import kelm.CmdFactoryNotImplementedException
-import kelm.ExternalError
+import kelm.ExternalException
 import kelm.Log
 import kelm.Optional
 import kelm.Some
 import kelm.Sub
 import kelm.SubContext
 import kelm.SubFactoryNotImplementedException
-import kelm.SubscriptionError
+import kelm.SubscriptionException
 import kelm.UpdateContext
 import kelm.UpdateF
 import kelm.toNullable
@@ -40,7 +40,8 @@ internal data class UpdatePrime<ModelT, MsgT, CmdT, SubT>(
 private data class SubsState<ModelT, MsgT, CmdT, SubT>(
     val updatePrime: UpdatePrime<ModelT, MsgT, CmdT, SubT>? = null,
     val subs: List<SubT> = emptyList(),
-    val subsPrime: List<SubT> = emptyList()
+    val subsPrime: List<SubT> = emptyList(),
+    val same: Boolean = false
 )
 
 private sealed class SubsDiffOp<SubT> {
@@ -59,10 +60,12 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         msgObs: Observable<MsgT>,
         modelObs: Observable<ModelT>
     ) -> Observable<MsgT> = { _, _, _ -> Observable.error(SubFactoryNotImplementedException()) },
-    errorToMsg: (error: ExternalError) -> MsgT? = { null },
+    errorToMsg: (error: ExternalException) -> MsgT? = { null },
     logger: (Log<ModelT, MsgT, CmdT, SubT>) -> Disposable?,
     update: UpdateF<ModelT, MsgT, CmdT, SubT>
 ): Observable<ModelT> = Observable.defer {
+    val DISPOSABLE_SIZE_THRESHOLD = 100
+
     val errorSubj = PublishSubject.create<MsgT>()
     val modelSubj =
         BehaviorSubject
@@ -77,7 +80,8 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
     fun Log<ModelT, MsgT, CmdT, SubT>.log() = synchronized(loggerDisposables) {
         val disposable = logger(this)
         if (disposable != null) loggerDisposables.add(disposable)
-        if (loggerDisposables.size > 30) loggerDisposables.removeAll { it.isDisposed }
+        if (loggerDisposables.size > DISPOSABLE_SIZE_THRESHOLD)
+            loggerDisposables.removeAll { it.isDisposed }
     }
 
     val initCmdOps = initCmds?.map { cmd -> CmdOp.Start(cmd) }
@@ -113,7 +117,8 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                 val disposable = cmdDisposables[cmdId]
                 if (disposable == null) {
                     if (logIdNotFound) {
-                        Log.CmdIdNotFoundToCancel<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdId).log()
+                        Log.CmdIdNotFoundToCancel<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdId)
+                            .log()
                     }
                 } else {
                     Log.CmdCancelled<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdId).log()
@@ -130,7 +135,11 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                         cmdDisposables[cmdOp.cmd.id] =
                             cmdToMaybe(cmdOp.cmd)
                                 .doOnSuccess {
-                                    Log.CmdEmission<ModelT, MsgT, CmdT, SubT>(getLogIdx(), cmdOp.cmd, it)
+                                    Log.CmdEmission<ModelT, MsgT, CmdT, SubT>(
+                                        getLogIdx(),
+                                        cmdOp.cmd,
+                                        it
+                                    )
                                         .log()
                                 }
                                 .doOnSuccess(msgSubj::onNext)
@@ -141,7 +150,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                                         error
                                     ).log()
 
-                                    CmdError(cmdOp.cmd as Any, error)
+                                    CmdException(cmdOp.cmd as Any, error)
                                         .let { cmdError ->
                                             when (val msg = errorToMsg(cmdError)) {
                                                 null -> errorSubj.onError(cmdError)
@@ -160,16 +169,19 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         }
         .doOnNext { _ ->
             synchronized(cmdDisposables) {
-                cmdDisposables
-                    .toMap()
-                    .filter { it.value.isDisposed }
-                    .map { it.key }
-                    .forEach { cmdDisposables.remove(it) }
+                if (cmdDisposables.size > DISPOSABLE_SIZE_THRESHOLD) {
+                    cmdDisposables
+                        .toMap()
+                        .filter { it.value.isDisposed }
+                        .map { it.key }
+                        .forEach { cmdDisposables.remove(it) }
+                }
             }
         }
         .doOnNext { updatePrime -> updatePrime.msgsFromOtherContext.forEach(msgSubj::onNext) }
         .scan(SubsState<ModelT, MsgT, CmdT, SubT>()) { subsState, updatePrime ->
-            val model = updatePrime.modelPrime ?: return@scan subsState
+            val model = updatePrime.modelPrime
+                ?: return@scan subsState.copy(same = true)
 
             val subsPrime = subContext.execute(
                 f = subscriptions,
@@ -183,6 +195,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
             )
         }
         .skip(1)
+        .filter { !it.same }
         .doOnNext { subsState ->
             val (updatePrime, subs, subsPrime) = subsState
 
@@ -199,8 +212,10 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                     is SubsDiffOp.Create ->
                         subToObservable(diff.sub, msgObs, modelObs)
                             .also {
-                                Log.SubscriptionStarted<ModelT, MsgT, CmdT, SubT>(getLogIdx(), diff.sub)
-                                    .log()
+                                Log.SubscriptionStarted<ModelT, MsgT, CmdT, SubT>(
+                                    getLogIdx(),
+                                    diff.sub
+                                ).log()
                             }
                             .doOnNext { msg ->
                                 Log.SubscriptionEmission<ModelT, MsgT, CmdT, SubT>(
@@ -212,7 +227,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                                 Log.SubscriptionError<ModelT, MsgT, CmdT, SubT>(
                                     getLogIdx(), diff.sub, error
                                 ).log()
-                                SubscriptionError(diff.sub as Any, error)
+                                SubscriptionException(diff.sub as Any, error)
                                     .let { subError ->
                                         when (val msg = errorToMsg(subError)) {
                                             null -> errorSubj.onError(subError)
@@ -228,8 +243,10 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
                             }
                     is SubsDiffOp.Dispose -> {
                         synchronized(subDisposables) {
-                            Log.SubscriptionCancelled<ModelT, MsgT, CmdT, SubT>(getLogIdx(), diff.sub)
-                                .log()
+                            Log.SubscriptionCancelled<ModelT, MsgT, CmdT, SubT>(
+                                getLogIdx(),
+                                diff.sub
+                            ).log()
                             subDisposables[diff.sub.id]?.dispose()
                             subDisposables.remove(diff.sub.id)
                         }

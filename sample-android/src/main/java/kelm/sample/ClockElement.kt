@@ -1,6 +1,6 @@
 package kelm.sample
 
-import kelm.ExternalError
+import kelm.ExternalException
 import kelm.Kelm
 import kelm.SubContext
 import kelm.UpdateContext
@@ -48,5 +48,5 @@ object ClockElement : Kelm.Element<Model, Msg, Nothing, Sub>() {
         }
     }
 
-    override fun errorToMsg(error: ExternalError): Msg? = null
+    override fun errorToMsg(error: ExternalException): Msg? = null
 }

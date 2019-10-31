@@ -1,8 +1,7 @@
 package kelm.sample.signUp
 
-import kelm.ExternalError
+import kelm.ExternalException
 import kelm.Kelm
-import kelm.MsgOrCmd
 import kelm.SubContext
 import kelm.UpdateContext
 import kelm.sample.signUp.SignUpElement.Cmd
@@ -159,5 +158,5 @@ object SignUpElement : Kelm.Element<Model, Msg, Cmd, Nothing>() {
         }
 
     override fun SubContext<Nothing>.subscriptions(model: Model) = Unit
-    override fun errorToMsg(error: ExternalError): Msg? = null
+    override fun errorToMsg(error: ExternalException): Msg? = null
 }

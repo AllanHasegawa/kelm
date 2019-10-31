@@ -3,6 +3,7 @@ package kelm
 import io.reactivex.Maybe
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
+import io.reactivex.subjects.PublishSubject
 import kelm.internal.CmdOp
 import kelm.internal.UpdatePrime
 import kelm.internal.build
@@ -34,7 +35,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
         internal val msgOrCmdContext = MsgOrCmdContext<Any, Cmd>()
     }
 
-    internal val cmdOps = mutableListOf<CmdOp<CmdT>>()
+    private val cmdOps = mutableListOf<CmdOp<CmdT>>()
     private val msgsFromOtherContext = mutableListOf<MsgT>()
     private val subsFromOtherContext = mutableListOf<SubT>()
 
@@ -143,7 +144,7 @@ class UpdateContext<ModelT, MsgT, CmdT : Cmd, SubT : Sub> internal constructor()
 
 class SubContext<SubT : Sub> internal constructor() {
 
-    internal val subs = mutableListOf<SubT>()
+    private val subs = mutableListOf<SubT>()
 
     internal fun <ModelT> execute(
         f: SubContext<SubT>.(ModelT) -> Unit,
@@ -161,6 +162,10 @@ class SubContext<SubT : Sub> internal constructor() {
 
     fun retain(subs: List<SubT>) {
         subs.forEach(::retain)
+    }
+
+    fun retain(vararg subs: SubT) {
+        retain(subs.toList())
     }
 
     operator fun SubT.unaryPlus() {
@@ -250,72 +255,51 @@ class TestEnvironment<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
     val history: List<Log.Update<ModelT, MsgT, CmdT, SubT>>
         get() = steps.toList()
 
-    private val updateContext = UpdateContext<ModelT, MsgT, CmdT, SubT>()
-    private val subContext = SubContext<SubT>()
-    private val steps = mutableListOf<Log.Update<ModelT, MsgT, CmdT, SubT>>()
+    private val steps = mutableListOf(initStep())
+    private val msgSubj = PublishSubject.create<MsgT>()
 
     fun step(vararg msgs: MsgT): Log.Update<ModelT, MsgT, CmdT, SubT> {
         require(msgs.isNotEmpty()) { "msgs should not be empty" }
 
-        data class History(
-            val lastOne: Log.Update<ModelT, MsgT, CmdT, SubT>,
-            val history: List<Log.Update<ModelT, MsgT, CmdT, SubT>>
-        )
+        val logCapturer = mutableListOf<Log.Update<ModelT, MsgT, CmdT, SubT>>()
 
-        fun Log.Update<ModelT, MsgT, CmdT, SubT>.lastModel() = modelPrime ?: model
-
-        val startUpdate =
-            steps.lastOrNull()
-                ?: run {
-                    val startCmds = element.initCmds(initModel)
-                        ?: emptyList()
-
-                    Log.Update<ModelT, MsgT, CmdT, SubT>(
-                        index = 0,
-                        model = initModel,
-                        msg = null,
-                        modelPrime = initModel,
-                        cmdsStarted = startCmds,
-                        cmdIdsCancelled = emptyList()
-                    )
+        val ts = element
+            .start(
+                initModel = steps.last().let { it.modelPrime ?: it.model },
+                msgInput = msgSubj,
+                cmdToMaybe = { Maybe.empty() },
+                subToObs = { _, _, _ -> Observable.empty() },
+                logger = {
+                    (it as? Log.Update)?.let(logCapturer::add)
+                    null
                 }
+            )
+            .test()
 
-        val history = msgs
-            .fold(History(startUpdate, history = listOf(startUpdate))) { (update, history), msg ->
-                val model = update.lastModel()
+        msgs.forEach(msgSubj::onNext)
 
-                val modelPrime = with(element) {
-                    with(subContext) {
-                        subscriptions(model)
-                    }
-                    with(updateContext) {
-                        update(model, msg)
-                    }
-                }
+        ts.dispose()
 
-                val updatePrime = Log.Update(
-                    index = update.index + 1,
-                    model = model,
-                    msg = msg,
-                    modelPrime = modelPrime,
-                    cmdsStarted = updateContext.cmdOps
-                        .mapNotNull { (it as? CmdOp.Start<CmdT>)?.cmd },
-                    cmdIdsCancelled = updateContext.cmdOps
-                        .mapNotNull { (it as? CmdOp.Cancel)?.cmdId },
-                    subs = subContext.subs
-                )
-                History(updatePrime, history + updatePrime)
-            }
+        val indexOffset = steps.last().index + 1
+        val newSteps = logCapturer
+            .mapIndexed { idx, step -> step.copy(index = idx + indexOffset) }
 
-        val lastUpdate = history.lastOne
-        val newSteps = if (steps.isEmpty()) {
-            history.history
-        } else {
-            history.history.drop(1)
-        }
         steps.addAll(newSteps)
+        return steps.last()
+    }
 
-        return lastUpdate
+    private fun initStep(): Log.Update<ModelT, MsgT, CmdT, SubT> {
+        val startCmds = element.initCmds(initModel)
+            ?: emptyList()
+
+        return Log.Update(
+            index = 0,
+            model = initModel,
+            msg = null,
+            modelPrime = initModel,
+            cmdsStarted = startCmds,
+            cmdIdsCancelled = emptyList()
+        )
     }
 }
 
@@ -341,7 +325,7 @@ object Kelm {
                 logger = logger
             )
 
-        final override fun errorToMsg(error: ExternalError): MsgT? = null
+        final override fun errorToMsg(error: ExternalException): MsgT? = null
         final override fun initCmds(initModel: ModelT): List<Nothing>? = null
         final override fun SubContext<Nothing>.subscriptions(model: ModelT) = Unit
     }
@@ -355,7 +339,7 @@ object Kelm {
         ): ModelT?
 
         abstract fun SubContext<SubT>.subscriptions(model: ModelT)
-        abstract fun errorToMsg(error: ExternalError): MsgT?
+        abstract fun errorToMsg(error: ExternalException): MsgT?
 
         fun start(
             initModel: ModelT,

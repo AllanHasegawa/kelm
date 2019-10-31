@@ -1,7 +1,6 @@
 import io.kotlintest.matchers.collections.shouldBeEmpty
-import io.kotlintest.matchers.collections.shouldContain
 import io.kotlintest.shouldBe
-import kelm.ExternalError
+import kelm.ExternalException
 import kelm.Kelm
 import kelm.SubContext
 import kelm.UpdateContext
@@ -18,26 +17,23 @@ import org.spekframework.spek2.Spek
 object AElement : Kelm.Element<AElement.Model, AElement.Msg, AElement.Cmd, Nothing>() {
     data class Model(val count: Int)
 
-    data class Msg(val inc: Int)
+    sealed class Msg {
+        object Inc : Msg()
+        object GoToB : Msg()
+    }
 
     sealed class Cmd : kelm.Cmd() {
         object GoToB : Cmd()
     }
 
     override fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg): Model? =
-        model.copy(count = model.count + msg.inc)
-            .let {
-                when (it.count) {
-                    in 0..50 -> it
-                    else -> {
-                        +Cmd.GoToB
-                        Model(0)
-                    }
-                }
-            }
+        when (msg) {
+            is Msg.Inc -> model.copy(count = model.count + 1)
+            is Msg.GoToB -> model.copy(count = 0).also { +Cmd.GoToB }
+        }
 
     override fun SubContext<Nothing>.subscriptions(model: Model) = Unit
-    override fun errorToMsg(error: ExternalError): Msg? = null
+    override fun errorToMsg(error: ExternalException): Msg? = null
 }
 
 object BElement : Kelm.Sandbox<BElement.Model, BElement.Msg>() {
@@ -51,10 +47,10 @@ object BElement : Kelm.Sandbox<BElement.Model, BElement.Msg>() {
 
 object ParentElement :
     Kelm.Element<ParentElement.Model, ParentElement.Msg, ParentElement.Cmd, Nothing>() {
-    data class Model(
-        val a: AElement.Model?,
-        val b: BElement.Model?
-    )
+    sealed class Model {
+        data class A(val value: AElement.Model) : Model()
+        data class B(val value: BElement.Model) : Model()
+    }
 
     sealed class Msg {
         data class ForA(val msg: AElement.Msg) : Msg()
@@ -69,13 +65,13 @@ object ParentElement :
         model: Model,
         msg: Msg
     ): Model? =
-        when (model.a) {
-            is AElement.Model ->
+        when (model) {
+            is Model.A ->
                 when (msg) {
                     is Msg.ForA ->
                         switchContext(
                             otherElement = AElement,
-                            otherModel = model.a,
+                            otherModel = model.value,
                             otherMsg = msg.msg,
                             otherCmdToMsgOrCmd = { otherCmd ->
                                 when (otherCmd) {
@@ -83,101 +79,61 @@ object ParentElement :
                                 }
                             },
                             otherSubToSub = { it }
-                        )?.let { model.copy(a = it) }
-                    is Msg.GoToB ->
-                        Model(
-                            a = null,
-                            b = BElement.Model(0)
-                        )
+                        )?.let { model.copy(value = it) }
+                    is Msg.GoToB -> Model.B(BElement.Model(0))
                     else -> null
                 }
-            null ->
+            is Model.B ->
                 when (msg) {
                     is Msg.ForB ->
                         switchContext(
                             otherElement = BElement,
-                            otherModel = model.b!!,
+                            otherModel = model.value,
                             otherMsg = msg.msg,
                             otherCmdToMsgOrCmd = { error("BElement has no CMD") },
                             otherSubToSub = { it }
-                        )?.let { model.copy(b = it) }
+                        )?.let { model.copy(value = it) }
                     else -> null
                 }
-            else -> null
         }
 
     override fun SubContext<Nothing>.subscriptions(model: Model) = Unit
 
-    override fun errorToMsg(error: ExternalError): Msg? = null
-
-//    override fun updateSimple(model: Model, msg: Msg): Model? =
-//        when (msg) {
-//            is Msg.ForA ->
-//                model.copy(
-//                    a = switchContext<ModelA, MsgA, CmdA>(
-//                        model = model.a,
-//                        msg = msg.msg,
-//                        otherCmdToCmd = { cmdA ->
-//                            when (cmdA) {
-//                                is CmdA.GoToB -> Cmd.GoToB
-//                            }
-//                        }
-//                    ) { model, msg ->
-//                        updateA(model, msg)
-//                    }
-//                )
-//            else -> null
-//        }
-//        else ->
-//        when (msg) {
-//            is Msg.ForB ->
-//                model.copy(
-//                    b = switchContext<ModelB, MsgB, Nothing>(
-//                        model.b!!,
-//                        msg.msg,
-//                        { null }
-//                    ) { model, msg -> updateB(model, msg) }
-//                )
-//            else -> null
-//        }
-//    }
+    override fun errorToMsg(error: ExternalException): Msg? = null
 }
-
-
-//    private fun steps(vararg msgs: msg) =
-//    kelm.test<model, msg, cmd>(
-//        update = { model, msg -> update(model, msg) },
-//        initmodel = model(a = modela(count = 0), b = null),
-//        msgs = msgs.tolist()
-//tolist    )
 
 object KelmContextSwitchTest : Spek({
     group("Given a model with two contexts") {
-        val model = ParentElement.Model(a = AElement.Model(count = 0), b = null)
+        val model = AElement.Model(count = 0).let(ParentElement.Model::A)
 
         test("whenever a msg comes for A, update the corresponding model") {
             val (newModel, cmdsStarted) = ParentElement
                 .test(model)
                 .step(
-                    ParentElement.Msg.ForA(AElement.Msg(10))
+                    ParentElement.Msg.ForA(AElement.Msg.Inc),
+                    ParentElement.Msg.ForA(AElement.Msg.Inc),
+                    ParentElement.Msg.ForA(AElement.Msg.Inc)
                 )
-                .let { it.modelPrime !! to it.cmdsStarted }
+                .let { it.modelPrime!! to it.cmdsStarted }
 
-            newModel.a shouldBe AElement.Model(10)
+            (newModel as ParentElement.Model.A).value shouldBe AElement.Model(3)
             cmdsStarted.shouldBeEmpty()
         }
 
         test("whenever A tries to switch to B, then the CMD should be sent") {
-            val (newModel, cmdsStarted) = ParentElement
-                .test(model)
-                .step(
-                    ParentElement.Msg.ForA(AElement.Msg(51))
-                )
-                .let { it.modelPrime !! to it.cmdsStarted }
+            val te = ParentElement.test(model)
 
-            newModel.a shouldBe null
-            newModel.b shouldBe BElement.Model(0)
+            val (newModel, cmdsStarted) =
+                te.step(ParentElement.Msg.ForA(AElement.Msg.GoToB))
+                    .let { it.modelPrime!! to it.cmdsStarted }
+
+            (newModel as ParentElement.Model.B).value shouldBe BElement.Model(0)
             cmdsStarted.shouldBeEmpty()
+
+            val newBModel = te.step(ParentElement.Msg.ForB(BElement.Msg(3)))
+                .let { it.modelPrime!! }
+
+            (newBModel as ParentElement.Model.B).value shouldBe BElement.Model(-3)
         }
     }
 })
