@@ -5,19 +5,22 @@ import android.view.View
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.squareup.picasso.Picasso
+import io.reactivex.Maybe
+import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.subjects.PublishSubject
-import kelm.Kelm
-import kelm.UpdateContext
-import kelm.sample.FoxServiceContract.Cmd
-import kelm.sample.FoxServiceContract.Model
-import kelm.sample.FoxServiceContract.Msg
+import kelm.Log
+import kelm.sample.FoxServiceElement.Cmd
+import kelm.sample.FoxServiceElement.Model
+import kelm.sample.FoxServiceElement.Msg
 import kotlinx.android.synthetic.main.activity_fox_service_sample.*
 import kotlinx.android.synthetic.main.layout_fox_service_conn_error.*
 import kotlinx.android.synthetic.main.layout_fox_service_content.*
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.ExperimentalTime
 
 class FoxServiceSampleActivity : AppCompatActivity() {
     private val service = FakeFoxPicsService()
@@ -34,16 +37,17 @@ class FoxServiceSampleActivity : AppCompatActivity() {
         foxServiceRetryBt.sendMsgOnClick(Msg.Fetch)
     }
 
+    @ExperimentalTime
     override fun onStart() {
         super.onStart()
 
-        modelDisposable = Kelm
-            .build<Model, Msg, Cmd, Nothing>(
+        modelDisposable = FoxServiceElement
+            .start(
+                initModel = FoxServiceElement.initModel(),
                 msgInput = msgSubj,
-                initModel = FoxServiceContract.initModel(),
-                initCmd = FoxServiceContract.initCmd(),
-                update = { model, msg -> update(model, msg) },
-                cmdToMaybe = { cmd: Cmd -> cmdToMaybe(cmd) }
+                cmdToMaybe = ::cmdToMaybe,
+                subToObs = { _, _, _ -> Observable.empty() },
+                logger = ::logger
             )
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe { model ->
@@ -55,38 +59,10 @@ class FoxServiceSampleActivity : AppCompatActivity() {
             }
     }
 
-    private fun UpdateContext<Cmd>.update(model: Model, msg: Msg) =
-        when (model) {
-            is Model.Loading ->
-                when (msg) {
-                    is Msg.GotFoxPicUrl -> Model.ContentLoaded(foxPicUrl = msg.url)
-
-                    is Msg.ConnError -> Model.ConnError
-
-                    else -> model
-                }
-
-            is Model.ConnError ->
-                when (msg) {
-                    is Msg.Fetch -> Model.Loading.also {
-                        +Cmd.Fetch(1, TimeUnit.SECONDS)
-                    }
-                    is Msg.GotFoxPicUrl -> Model.ContentLoaded(foxPicUrl = msg.url)
-                    else -> model
-                }
-
-            is Model.ContentLoaded ->
-                when (msg) {
-                    is Msg.Fetch -> Model.Loading.also {
-                        +Cmd.Fetch(1, TimeUnit.SECONDS)
-                    }
-                    else -> model
-                }
-        }
-
-    private fun cmdToMaybe(cmd: Cmd) =
+    @ExperimentalTime
+    private fun cmdToMaybe(cmd: Cmd): Maybe<Msg> =
         when (cmd) {
-            is Cmd.Fetch -> fetchCmd(cmd.delay, cmd.unit)
+            is Cmd.Fetch -> fetchCmd(cmd.delay)
         }
 
     private fun handleConnErrorModel() {
@@ -116,8 +92,9 @@ class FoxServiceSampleActivity : AppCompatActivity() {
             .forEach { it.visibility = View.GONE }
     }
 
-    private fun fetchCmd(delay: Long, unit: TimeUnit) =
-        Single.timer(delay, unit)
+    @ExperimentalTime
+    private fun fetchCmd(delay: Duration) =
+        Single.timer(delay.toLongMilliseconds(), TimeUnit.MILLISECONDS)
             .flatMap {
                 service.fetchRandomFoxPicUrl()
             }
@@ -126,4 +103,9 @@ class FoxServiceSampleActivity : AppCompatActivity() {
             .cast(Msg::class.java)
             .onErrorReturn { Msg.ConnError }
             .toMaybe()
+
+    private fun logger(log: Log<Model, Msg, Cmd, Nothing>): Disposable? {
+        println(log)
+        return null
+    }
 }

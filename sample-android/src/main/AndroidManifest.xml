@@ -11,7 +11,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".signUpForm.SignUpFormSampleActivity"></activity>
+        <activity android:name=".signUp.SignUpFormSampleActivity"></activity>
         <activity android:name=".FoxServiceSampleActivity" />
         <activity android:name=".ClockSampleActivity" />
         <activity android:name=".CounterSampleActivity" />

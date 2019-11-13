@@ -7,19 +7,15 @@ repositories {
 }
 
 dependencies {
-    def spek_version = "2.0.5"
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation "io.reactivex.rxjava2:rxjava:2.2.8"
+    implementation Dep.kotlin.std
+    implementation Dep.kotlin.rxJava
 
-    testImplementation 'junit:junit:4.12'
-    testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
-    testImplementation "io.kotlintest:kotlintest-assertions:3.4.0"
-
-    //spek2
-    testImplementation "org.spekframework.spek2:spek-dsl-jvm:$spek_version"
-    testRuntimeOnly "org.spekframework.spek2:spek-runner-junit5:$spek_version"
-    testImplementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+    testImplementation Dep.kotlin.junit
+    testImplementation Dep.kotlin.kotlinTest
+    testImplementation Dep.kotlin.kotlinAssertions
+    testImplementation Dep.kotlin.spekJvm
+    testRuntimeOnly Dep.kotlin.spekRuntime
+    testImplementation Dep.kotlin.reflect
 }
 
 test {
@@ -30,6 +26,8 @@ test {
     testLogging {
         events("passed", "skipped", "failed")
     }
+
+    systemProperty 'SPEK_TIMEOUT', 0
 }
 
 group = 'com.github.AllanHasegawa.kelm'

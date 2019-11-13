@@ -1,7 +1,8 @@
 import io.kotlintest.matchers.collections.shouldBeEmpty
-import io.kotlintest.matchers.collections.shouldContain
 import io.kotlintest.shouldBe
+import kelm.ExternalException
 import kelm.Kelm
+import kelm.SubContext
 import kelm.UpdateContext
 import org.spekframework.spek2.Spek
 
@@ -13,105 +14,126 @@ import org.spekframework.spek2.Spek
  * and send a `Cmd` to switch to context B.
  */
 
-private data class ModelA(val count: Int)
+object AElement : Kelm.Element<AElement.Model, AElement.Msg, AElement.Cmd, Nothing>() {
+    data class Model(val count: Int)
 
-private data class ModelB(val count: Int)
-
-private data class Model(
-    val a: ModelA?,
-    val b: ModelB?
-)
-
-private data class MsgA(val inc: Int)
-private data class MsgB(val dec: Int)
-
-private sealed class Msg {
-    data class ForA(val msg: MsgA) : Msg()
-    data class ForB(val msg: MsgB) : Msg()
-}
-
-private sealed class CmdA : kelm.Cmd() {
-    object GoToB : CmdA()
-}
-
-private sealed class Cmd : kelm.Cmd() {
-    object GoToB : Cmd()
-}
-
-private fun UpdateContext<CmdA>.updateA(model: ModelA, msg: MsgA): ModelA? =
-    model.copy(count = model.count + msg.inc)
-        .let {
-            when (it.count) {
-                in 0..50 -> it
-                else -> {
-                    runCmd(CmdA.GoToB)
-                    ModelA(0)
-                }
-            }
-        }
-
-private fun updateB(model: ModelB, msg: MsgB): ModelB? =
-    model.copy(count = model.count - msg.dec)
-
-private fun UpdateContext<Cmd>.update(model: Model, msg: Msg): Model? =
-    when (model.a) {
-        is ModelA ->
-            when (msg) {
-                is Msg.ForA ->
-                    model.copy(
-                        a = switchContext<ModelA, MsgA, CmdA>(
-                            model = model.a,
-                            msg = msg.msg,
-                            otherCmdToCmd = { cmdA ->
-                                when (cmdA) {
-                                    is CmdA.GoToB -> Cmd.GoToB
-                                }
-                            }
-                        ) { model, msg ->
-                            updateA(model, msg)
-                        }
-                    )
-                else -> null
-            }
-        else ->
-            when (msg) {
-                is Msg.ForB ->
-                    model.copy(
-                        b = switchContext<ModelB, MsgB, Nothing>(
-                            model.b!!,
-                            msg.msg,
-                            { null }
-                        ) { model, msg -> updateB(model, msg) }
-                    )
-                else -> null
-            }
+    sealed class Msg {
+        object Inc : Msg()
+        object GoToB : Msg()
     }
 
-private fun steps(vararg msgs: Msg) =
-    Kelm.test<Model, Msg, Cmd>(
-        update = { model, msg -> update(model, msg) },
-        initModel = Model(a = ModelA(count = 0), b = null),
-        msgs = msgs.toList()
-    )
+    sealed class Cmd : kelm.Cmd() {
+        object GoToB : Cmd()
+    }
+
+    override fun UpdateContext<Model, Msg, Cmd, Nothing>.update(model: Model, msg: Msg): Model? =
+        when (msg) {
+            is Msg.Inc -> model.copy(count = model.count + 1)
+            is Msg.GoToB -> model.copy(count = 0).also { +Cmd.GoToB }
+        }
+
+    override fun SubContext<Nothing>.subscriptions(model: Model) = Unit
+    override fun errorToMsg(error: ExternalException): Msg? = null
+}
+
+object BElement : Kelm.Sandbox<BElement.Model, BElement.Msg>() {
+    data class Model(val count: Int)
+
+    data class Msg(val dec: Int)
+
+    override fun updateSimple(model: Model, msg: Msg): Model? =
+        model.copy(count = model.count - msg.dec)
+}
+
+object ParentElement :
+    Kelm.Element<ParentElement.Model, ParentElement.Msg, ParentElement.Cmd, Nothing>() {
+    sealed class Model {
+        data class A(val value: AElement.Model) : Model()
+        data class B(val value: BElement.Model) : Model()
+    }
+
+    sealed class Msg {
+        data class ForA(val msg: AElement.Msg) : Msg()
+        data class ForB(val msg: BElement.Msg) : Msg()
+
+        object GoToB : Msg()
+    }
+
+    object Cmd : kelm.Cmd()
+
+    override fun UpdateContext<Model, Msg, Cmd, Nothing>.update(
+        model: Model,
+        msg: Msg
+    ): Model? =
+        when (model) {
+            is Model.A ->
+                when (msg) {
+                    is Msg.ForA ->
+                        switchContext(
+                            otherElement = AElement,
+                            otherModel = model.value,
+                            otherMsg = msg.msg,
+                            otherCmdToMsgOrCmd = { otherCmd ->
+                                when (otherCmd) {
+                                    is AElement.Cmd.GoToB -> Msg.GoToB.ret()
+                                }
+                            },
+                            otherSubToSub = { it }
+                        )?.let { model.copy(value = it) }
+                    is Msg.GoToB -> Model.B(BElement.Model(0))
+                    else -> null
+                }
+            is Model.B ->
+                when (msg) {
+                    is Msg.ForB ->
+                        switchContext(
+                            otherElement = BElement,
+                            otherModel = model.value,
+                            otherMsg = msg.msg,
+                            otherCmdToMsgOrCmd = { error("BElement has no CMD") },
+                            otherSubToSub = { it }
+                        )?.let { model.copy(value = it) }
+                    else -> null
+                }
+        }
+
+    override fun SubContext<Nothing>.subscriptions(model: Model) = Unit
+
+    override fun errorToMsg(error: ExternalException): Msg? = null
+}
 
 object KelmContextSwitchTest : Spek({
     group("Given a model with two contexts") {
-        test("whenever a msg comes for A, update the corresponding model") {
-            val (model, cmds) = steps(
-                Msg.ForA(MsgA(10))
-            ).last().let { it.modelPrime!! to it.cmdsStarted }
+        val model = AElement.Model(count = 0).let(ParentElement.Model::A)
 
-            model.a shouldBe ModelA(10)
-            cmds.shouldBeEmpty()
+        test("whenever a msg comes for A, update the corresponding model") {
+            val (newModel, cmdsStarted) = ParentElement
+                .test(model)
+                .step(
+                    ParentElement.Msg.ForA(AElement.Msg.Inc),
+                    ParentElement.Msg.ForA(AElement.Msg.Inc),
+                    ParentElement.Msg.ForA(AElement.Msg.Inc)
+                )
+                .let { it.modelPrime!! to it.cmdsStarted }
+
+            (newModel as ParentElement.Model.A).value shouldBe AElement.Model(3)
+            cmdsStarted.shouldBeEmpty()
         }
 
         test("whenever A tries to switch to B, then the CMD should be sent") {
-            val (model, cmds) = steps(
-                Msg.ForA(MsgA(51))
-            ).last().let { it.modelPrime!! to it.cmdsStarted }
+            val te = ParentElement.test(model)
 
-            model.a shouldBe ModelA(0)
-            cmds shouldContain Cmd.GoToB
+            val (newModel, cmdsStarted) =
+                te.step(ParentElement.Msg.ForA(AElement.Msg.GoToB))
+                    .let { it.modelPrime!! to it.cmdsStarted }
+
+            (newModel as ParentElement.Model.B).value shouldBe BElement.Model(0)
+            cmdsStarted.shouldBeEmpty()
+
+            val newBModel = te.step(ParentElement.Msg.ForB(BElement.Msg(3)))
+                .let { it.modelPrime!! }
+
+            (newBModel as ParentElement.Model.B).value shouldBe BElement.Model(-3)
         }
     }
 })

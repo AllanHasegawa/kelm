@@ -1,6 +1,7 @@
 # Kelm
 
-Kelm eases the pain when dealing with complex app state and asynchronous tasks.
+Kelm simplifies management of complex app states and asynchronous tasks.
+
 Kelm is a Kotlin library based on the [Elm Architecture](https://guide.elm-lang.org/architecture) and [RxJava](http://reactivex.io/).
 
 ## Introduction
@@ -17,31 +18,39 @@ The **Model** can only be updated in the **Update** function. **Messages** are t
 
 **Messages** can be UI events, responses from APIs, or the result of computations.
 
-A good strategy when designing the initial version of a **Model** and **Messages** is to write down every event the UI can generate, and everything it can render.
-
 ### A simple example
 
 Below is a simple Kelm app. Try to read and guess what it does:
 
 ```kotlin
-data class Model(val count: Int)
+object CounterElement : Kelm.Sandbox<Model, Msg>() {
+    sealed class Msg {
+        object MinusClick : Msg()
+        object PlusClick : Msg()
+        object ResetClick : Msg()
+    }
 
-sealed class Msg {
-    object Increment : Msg()
-    object Decrement : Msg()
+    data class Model(val count: Int) {
+        val resetBtEnabled = count > 0
+        val minusBtEnabled = resetBtEnabled
+    }
+
+    fun initModel() = Model(count = 0)
+
+    override fun updateSimple(model: Model, msg: Msg): Model? =
+        when (msg) {
+            is Msg.MinusClick -> model.copy(count = model.count - 1)
+            is Msg.PlusClick -> model.copy(count = model.count + 1)
+            is Msg.ResetClick -> model.copy(count = 0)
+        }
 }
 
 val msgSubj = PublishSubject.create<Msg>()
 
-Kelm.build<Model, Msg, Nothing>(
-    msgObserver = msgSubj,
-    initModel = Model(0)
-) { model, msg -> 
-    when (msg) {
-        is Increment -> Model(model.count + 1)
-        is Decrement -> Model(model.count - 1)
-    }
-}.subscribe { model ->
+CounterElement.start(
+    initModel = CounterElement.initModel(),
+    msgInput = msgSubj
+).subscribe { model ->
     println("The total count is ${model.count}")
 }
 
@@ -51,13 +60,17 @@ msgSubj.onNext(Msg.Decrement)
 ``` 
 
 The above example shows how the main flow of a Kelm app works.
-We first declare our **Model** and our **Messages**, we then build the main **Update** function.
+We first declare a `Kelm.Sandbox` object†, the contract for our **Model** and our **Messages**,
+and how they interact with the **update** function. 
+
+† Your **Sandbox** implementation should be an **object** with no properties.
 
 The **Update** is a *pure function* that takes the current **Model** and a **Message** and returns a new **Model**.
 
-The return of the `Kelm::build` is of type `Observable<Model>`. The **View** (a Android View, for example) can subscribe to this `Observable` and render it when it changes.
+The return of the `Element::start` is of type `Observable<Model>`.
+The **View** (an Android View, for example) can subscribe to this `Observable` and render it when it changes.
 
-See the [Counter Sample](sample-andorid/src/main/java/kelm/sample/CounterSampleActivity.kt) for a working implementation.
+See the [Counter Sample](sample-android/src/main/java/kelm/sample/CounterSampleActivity.kt).
 
 #### Rules for the **Update** function:
 
@@ -68,64 +81,36 @@ See the [Counter Sample](sample-andorid/src/main/java/kelm/sample/CounterSampleA
 
 ### Commands
 
-**Commands** are asynchronous tasks that finish with *one* **Message**.
+**Commands** are asynchronous tasks that finish with *at most one* **Message**.
 This **Message** indicates the result of a task, be it a successful result
 or an error.
 
-Here's an example using commands to fetch data from an API:
+* All side-effects and expensive computations must be done with **Commands**.
 
-```kotlin
-fun fetchFromApi(): Single<Response> = ...
+To work with **Commands** implement an ``Kelm::Element`` instead of a ``Kelm::Sandbox``.
 
-sealed class Model {
-    object Loading : Model()
-    data class LoadedContent(val response: Response) : Model()
-}
-
-sealed class Msg {
-    object FetchClick : Msg()
-    data class ContentFetched(val response: Response) : Msg()
-}
-
-sealed class Cmd : kelm.Cmd() {
-    object FetchFromApi : Cmd()
-}
-
-val msgSubj = PublishSubject.create<Msg>()
-
-Kelm.build<Model, Msg, Cmd>(
-    msgObserver = msgSubj,
-    initModel = Model.Loading,
-    cmdToSingle = { cmd ->
-        when (cmd) {
-            is Cmd.FetchFromApi ->
-                  fetchFromApi().map { Msg.ContentFetched(it) }
-        }
-    },
-    update = { model, msg ->
-        when (msg) {
-            is FetchClick -> Model.Loading.also {
-                runCmd(Cmd.FetchFromApi)
-            }
-            is ContentFetched -> Model.LoadedContent(msg.response)
-        }
-    }
-)
-```
-
-To work with **Commands** we first declare their type.
-Then we create a `cmdToSingle` function that takes a **Command** and transforms it into a `Single<Msg>`.
-This `Single<Msg>` is the action of a **Command** and *it should never emit any error in its error channel*.
+Then create a `cmdToMaybe` function that takes a **Command** and transforms it into a `Maybe<Msg>`.
+This `Maybe<Msg>` is the action of a **Command** and *it should never emit any error in its error channel*.
 
 The **Update** function has some special implicit functions like the `runCmd` function. `runCmd` adds the **Command** to be executed.
 
-See the [Fox Service Sample](sample-andorid/src/main/java/kelm/sample/FoxServiceSampleActivity.kt) for a working implementation.
+See the [Fox Service Sample](sample-android/src/main/java/kelm/sample/FoxServiceSampleActivity.kt).
 
 ### Subscriptions
 
 ```
 TODO
 ```
+
+See the [Clock Sample](sample-android/src/main/java/kelm/sample/ClockSampleActivity.kt).
+
+### Dealing with complex projects
+
+```
+TODO
+```
+
+See the [Advanced Sample](sample-android/src/main/java/kelm/sample/signUp).
 
 ### FAQ
 

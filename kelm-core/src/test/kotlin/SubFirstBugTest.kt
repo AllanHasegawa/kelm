@@ -3,71 +3,84 @@ import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
+import kelm.ExternalException
 import kelm.Kelm
+import kelm.SubContext
+import kelm.UpdateContext
 import org.spekframework.spek2.Spek
 import java.util.concurrent.TimeUnit
 
-private data class ModelSubBug(val msgs: List<MsgSubBug>)
+object SubBugE : Kelm.Element<SubBugE.Model, SubBugE.Msg, SubBugE.Cmd, SubBugE.Sub>() {
+    data class Model(val msgs: List<Msg>)
 
-private sealed class MsgSubBug {
-    object A : MsgSubBug()
-    object B : MsgSubBug()
-    object C : MsgSubBug()
-    object D : MsgSubBug()
+    sealed class Msg {
+        object A : Msg()
+        object B : Msg()
+        object C : Msg()
+        object D : Msg()
+    }
+
+    object Cmd : kelm.Cmd()
+
+    sealed class Sub(id: String) : kelm.Sub(id) {
+        object A : Sub("sub-a")
+        object B : Sub("sub-b")
+        object C : Sub("sub-c")
+    }
+
+    fun initModel() = Model(emptyList())
+
+    override fun UpdateContext<Model, Msg, Cmd, Sub>.update(model: Model, msg: Msg): Model? =
+        model.copy(msgs = model.msgs + msg)
+
+    override fun SubContext<Sub>.subscriptions(model: Model) {
+        +Sub.A
+        +Sub.B
+        +Sub.C
+    }
+
+    override fun errorToMsg(error: ExternalException): Msg? = null
 }
 
-private object CmdSubBug : kelm.Cmd()
-
-private sealed class SubSubBug(id: String) : kelm.Sub(id) {
-    object A : SubSubBug("sub-a")
-    object B : SubSubBug("sub-b")
-    object C : SubSubBug("sub-c")
-}
-
-class SubFirstBugTest : Spek({
+object SubFirstBugTest : Spek({
     repeat(1000) {
         group("Given a sub sends msgs right at its start, then all msgs should be handled") {
             // We are using the default schedulers during tests for purpose,
             // the idea is to force msgs being sent from multiples thread pools
             val subAObs = Observable.interval(0L, 1000L, TimeUnit.MILLISECONDS)
-                .map { MsgSubBug.A as MsgSubBug }
+                .map { SubBugE.Msg.A as SubBugE.Msg }
             val subBObs = Observable.interval(0L, 1000L, TimeUnit.MILLISECONDS)
-                .map { MsgSubBug.B as MsgSubBug }
-            val subCObs = Observable.just(MsgSubBug.C as MsgSubBug)
+                .map { SubBugE.Msg.B as SubBugE.Msg }
+            val subCObs = Observable.just(SubBugE.Msg.C as SubBugE.Msg)
 
-            val msgInput = PublishSubject.create<MsgSubBug>()
+            val msgInput = PublishSubject.create<SubBugE.Msg>()
 
-            val to = Kelm.build<ModelSubBug, MsgSubBug, CmdSubBug, SubSubBug>(
-                initModel = ModelSubBug(emptyList()),
+            val to = SubBugE.start(
+                initModel = SubBugE.initModel(),
                 msgInput = msgInput,
-                subscriptions = {
-                    runSub(SubSubBug.A)
-                    runSub(SubSubBug.B)
-                    runSub(SubSubBug.C)
-                },
-                subToObservable = { sub, _, _ ->
+                subToObs = { sub, _, _ ->
                     when (sub) {
-                        is SubSubBug.A -> subAObs
-                        is SubSubBug.B -> subBObs
-                        is SubSubBug.C -> subCObs
+                        is SubBugE.Sub.A -> subAObs
+                        is SubBugE.Sub.B -> subBObs
+                        is SubBugE.Sub.C -> subCObs
                     }
                 },
-                update = { model, msg -> model.copy(msgs = model.msgs + msg) }
+                cmdToMaybe = { error("No CMD") }
             ).test()
 
             Single.timer(10L, TimeUnit.MILLISECONDS, Schedulers.io())
                 .observeOn(Schedulers.trampoline())
                 .doOnSuccess {
-                    msgInput.onNext(MsgSubBug.D)
+                    msgInput.onNext(SubBugE.Msg.D)
                 }
                 .subscribe()
 
             to.awaitCount(5, {}, 15L)
             val actualMsgs = to.values().last().msgs
-            actualMsgs.count { it is MsgSubBug.A } shouldBe 1
-            actualMsgs.count { it is MsgSubBug.B } shouldBe 1
-            actualMsgs.count { it is MsgSubBug.C } shouldBe 1
-            actualMsgs.count { it is MsgSubBug.D } shouldBe 1
+            actualMsgs.count { it is SubBugE.Msg.A } shouldBe 1
+            actualMsgs.count { it is SubBugE.Msg.B } shouldBe 1
+            actualMsgs.count { it is SubBugE.Msg.C } shouldBe 1
+            actualMsgs.count { it is SubBugE.Msg.D } shouldBe 1
         }
     }
 })
