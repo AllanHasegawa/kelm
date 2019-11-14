@@ -112,6 +112,42 @@ TODO
 
 See the [Advanced Sample](sample-android/src/main/java/kelm/sample/signUp).
 
+### Testing
+
+```
+TODO
+```
+
+See the [CounterElementTest](sample-android/src/test/java/kelm/sample/CounterElementTest.kt)
+
+### Installing
+
+* Step 1. Add the JitPack repository to your build file.
+
+Add it in your root build.gradle at the end of repositories:
+
+```
+	allprojects {
+		repositories {
+			...
+			maven { url 'https://jitpack.io' }
+		}
+	}
+```
+
+* Step 2. Add the dependency
+
+```
+	dependencies {
+	        implementation 'com.github.AllanHasegawa:kelm:<version>'
+	}
+```
+
+Where `<version>` is:
+
+[![Release](https://jitpack.io/v/User/Repo.svg)]
+(https://jitpack.io/#AllanHasegawa/kelm)
+
 ### FAQ
 
 ```
