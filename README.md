@@ -145,7 +145,7 @@ Add it in your root build.gradle at the end of repositories:
 
 Where `<version>` is:
 
-[![Release](https://jitpack.io/v/User/Repo.svg)](https://jitpack.io/#AllanHasegawa/kelm)
+[![Release](https://jitpack.io/v/AllanHasegawa/kelm.svg)](https://jitpack.io/#AllanHasegawa/kelm)
 
 ### FAQ
 
