@@ -18,6 +18,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+        }
+    }
 }
 
 dependencies {
@@ -32,4 +37,10 @@ dependencies {
     implementation Dep.android.constraintLayout
     implementation Dep.android.picasso
     implementation Dep.android.loadingButton
+    testImplementation Dep.kotlin.junit
+    testImplementation Dep.kotlin.kotlinTest
+    testImplementation Dep.kotlin.kotlinAssertions
+    testImplementation Dep.kotlin.spekJvm
+    testRuntimeOnly Dep.kotlin.spekRuntime
+    testImplementation Dep.kotlin.reflect
 }
