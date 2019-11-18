@@ -259,7 +259,7 @@ class TestEnvironment<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
     private val msgSubj = PublishSubject.create<MsgT>()
 
     fun step(vararg msgs: MsgT): Log.Update<ModelT, MsgT, CmdT, SubT> {
-        require(msgs.isNotEmpty()) { "msgs should not be empty" }
+        if (msgs.isEmpty()) return steps.last()
 
         val logCapturer = mutableListOf<Log.Update<ModelT, MsgT, CmdT, SubT>>()
 
@@ -281,9 +281,10 @@ class TestEnvironment<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
         ts.dispose()
 
         val indexOffset = steps.last().index + 1
-        val newSteps = logCapturer
+        val newSteps = logCapturer.drop(1)
             .mapIndexed { idx, step -> step.copy(index = idx + indexOffset) }
 
+        println("adding new steps: $newSteps")
         steps.addAll(newSteps)
         return steps.last()
     }

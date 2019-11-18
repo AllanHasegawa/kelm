@@ -43,9 +43,9 @@ object SubBugE : Kelm.Element<SubBugE.Model, SubBugE.Msg, SubBugE.Cmd, SubBugE.S
 }
 
 object SubFirstBugTest : Spek({
-    repeat(1000) {
+    repeat(100) {
         group("Given a sub sends msgs right at its start, then all msgs should be handled") {
-            // We are using the default schedulers during tests for purpose,
+            // We are using the default schedulers during tests on purpose,
             // the idea is to force msgs being sent from multiples thread pools
             val subAObs = Observable.interval(0L, 1000L, TimeUnit.MILLISECONDS)
                 .map { SubBugE.Msg.A as SubBugE.Msg }
@@ -55,32 +55,34 @@ object SubFirstBugTest : Spek({
 
             val msgInput = PublishSubject.create<SubBugE.Msg>()
 
-            val to = SubBugE.start(
-                initModel = SubBugE.initModel(),
-                msgInput = msgInput,
-                subToObs = { sub, _, _ ->
-                    when (sub) {
-                        is SubBugE.Sub.A -> subAObs
-                        is SubBugE.Sub.B -> subBObs
-                        is SubBugE.Sub.C -> subCObs
+            test("then all msgs should be handled") {
+                val to = SubBugE.start(
+                    initModel = SubBugE.initModel(),
+                    msgInput = msgInput,
+                    subToObs = { sub, _, _ ->
+                        when (sub) {
+                            is SubBugE.Sub.A -> subAObs
+                            is SubBugE.Sub.B -> subBObs
+                            is SubBugE.Sub.C -> subCObs
+                        }
+                    },
+                    cmdToMaybe = { error("No CMD") }
+                ).test()
+
+                Single.timer(10L, TimeUnit.MILLISECONDS, Schedulers.io())
+                    .observeOn(Schedulers.trampoline())
+                    .doOnSuccess {
+                        msgInput.onNext(SubBugE.Msg.D)
                     }
-                },
-                cmdToMaybe = { error("No CMD") }
-            ).test()
+                    .subscribe()
 
-            Single.timer(10L, TimeUnit.MILLISECONDS, Schedulers.io())
-                .observeOn(Schedulers.trampoline())
-                .doOnSuccess {
-                    msgInput.onNext(SubBugE.Msg.D)
-                }
-                .subscribe()
-
-            to.awaitCount(5, {}, 15L)
-            val actualMsgs = to.values().last().msgs
-            actualMsgs.count { it is SubBugE.Msg.A } shouldBe 1
-            actualMsgs.count { it is SubBugE.Msg.B } shouldBe 1
-            actualMsgs.count { it is SubBugE.Msg.C } shouldBe 1
-            actualMsgs.count { it is SubBugE.Msg.D } shouldBe 1
+                to.awaitCount(5, {}, 15L)
+                val actualMsgs = to.values().last().msgs
+                actualMsgs.count { it is SubBugE.Msg.A } shouldBe 1
+                actualMsgs.count { it is SubBugE.Msg.B } shouldBe 1
+                actualMsgs.count { it is SubBugE.Msg.C } shouldBe 1
+                actualMsgs.count { it is SubBugE.Msg.D } shouldBe 1
+            }
         }
     }
 })

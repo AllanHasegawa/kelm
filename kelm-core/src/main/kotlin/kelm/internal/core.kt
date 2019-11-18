@@ -41,7 +41,7 @@ private data class SubsState<ModelT, MsgT, CmdT, SubT>(
     val updatePrime: UpdatePrime<ModelT, MsgT, CmdT, SubT>? = null,
     val subs: List<SubT> = emptyList(),
     val subsPrime: List<SubT> = emptyList(),
-    val same: Boolean = false
+    val sameSubs: Boolean = false
 )
 
 private sealed class SubsDiffOp<SubT> {
@@ -181,7 +181,7 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         .doOnNext { updatePrime -> updatePrime.msgsFromOtherContext.forEach(msgSubj::onNext) }
         .scan(SubsState<ModelT, MsgT, CmdT, SubT>()) { subsState, updatePrime ->
             val model = updatePrime.modelPrime
-                ?: return@scan subsState.copy(same = true)
+                ?: return@scan subsState.copy(updatePrime = updatePrime, sameSubs = true)
 
             val subsPrime = subContext.execute(
                 f = subscriptions,
@@ -191,15 +191,17 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
             SubsState(
                 updatePrime,
                 subs = subsState.subsPrime,
-                subsPrime = subsPrime
+                subsPrime = subsPrime,
+                sameSubs = false
             )
         }
         .skip(1)
-        .filter { !it.same }
         .doOnNext { subsState ->
-            val (updatePrime, subs, subsPrime) = subsState
+            val (updatePrime, subs, subsPrime, same) = subsState
 
             buildLogUpdate(getLogIdx(), updatePrime!!, subsPrime).log()
+
+            if (same) return@doOnNext
 
             val subsDiffs = computeSubsDiff(old = subs, new = subsPrime)
             val msgObs = msgInput.mergeWith(msgSubj).hide()

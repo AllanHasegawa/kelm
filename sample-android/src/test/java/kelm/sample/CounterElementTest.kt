@@ -16,7 +16,6 @@ object CounterElementTest : Spek({
                 resetBtEnabled shouldBe false
                 minusBtEnabled shouldBe false
             }
-
         }
     }
 
@@ -31,7 +30,6 @@ object CounterElementTest : Spek({
                 minusBtEnabled shouldBe true
             }
         }
-
     }
 
     group("given user clicked plus 3 times and minus 2 times") {
