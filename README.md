@@ -4,6 +4,8 @@ Kelm simplifies management of complex app states and asynchronous tasks.
 
 Kelm is a Kotlin library based on the [Elm Architecture](https://guide.elm-lang.org/architecture) and [RxJava](http://reactivex.io/).
 
+Read the motivation behind Kelm in [this blog post](https://medium.com/android-frontier/kelm-kotlin-ui-architecture-ea91fb745478).
+
 ## Introduction
 
 The Elm Architecture has three cleanly separated parts:
