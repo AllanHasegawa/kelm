@@ -1,6 +1,6 @@
 # Kelm
 
-Kelm simplifies management of complex app states and asynchronous tasks.
+Kelm is a helper library to implement a new kind of Presentation Layer Architecture, like MVI or MVVM, that simplifies management of complex app states and asynchronous tasks.
 
 Kelm is a Kotlin library based on the [Elm Architecture](https://guide.elm-lang.org/architecture) and [RxJava](http://reactivex.io/).
 
