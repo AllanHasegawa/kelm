@@ -17,6 +17,7 @@ import kelm.Sub
 import kelm.SubContext
 import kelm.SubFactoryNotImplementedException
 import kelm.SubscriptionException
+import kelm.UnhandledException
 import kelm.UpdateContext
 import kelm.UpdateF
 import kelm.toNullable
@@ -260,6 +261,12 @@ internal fun <ModelT, MsgT, CmdT : Cmd, SubT : Sub> build(
         .filter { it is Some<ModelT> }
         .map { it.toNullable()!! }
         .doOnDispose {
+            cmdDisposables.values.forEach(Disposable::dispose)
+            subDisposables.values.forEach(Disposable::dispose)
+            loggerDisposables.forEach(Disposable::dispose)
+        }
+        .doOnError {
+            errorToMsg(UnhandledException(it))
             cmdDisposables.values.forEach(Disposable::dispose)
             subDisposables.values.forEach(Disposable::dispose)
             loggerDisposables.forEach(Disposable::dispose)
