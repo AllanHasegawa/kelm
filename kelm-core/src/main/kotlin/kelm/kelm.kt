@@ -284,7 +284,6 @@ class TestEnvironment<ModelT, MsgT, CmdT : Cmd, SubT : Sub>(
         val newSteps = logCapturer.drop(1)
             .mapIndexed { idx, step -> step.copy(index = idx + indexOffset) }
 
-        println("adding new steps: $newSteps")
         steps.addAll(newSteps)
         return steps.last()
     }
