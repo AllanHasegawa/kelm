@@ -3,11 +3,8 @@ import UpdateRetNullNoEffectEle.Msg
 import io.kotlintest.matchers.numerics.shouldBeExactly
 import io.kotlintest.matchers.types.shouldBeNull
 import io.kotlintest.shouldBe
-import kelm.Log
-import kelm.DispatcherProvider
 import kelm.Sandbox
 import kelm.UpdateStep
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested

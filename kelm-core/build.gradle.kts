@@ -36,13 +36,16 @@ java {
 publishing {
     repositories {
         maven {
-            val releasesRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            val releasesRepoUrl =
+                "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
             val snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
             credentials {
                 username = System.getenv("OSSRH_USERNAME")
                 password = System.getenv("OSSRH_PASSWORD")
             }
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            url = uri(
+                if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+            )
         }
     }
 
@@ -56,8 +59,10 @@ publishing {
 
             pom {
                 name.set("Kelm")
-                description.set("Kelm simplifies management of complex app states and asynchronous tasks by enforcing a pattern\n" +
-                    "based on the Elm Architecture.")
+                description.set(
+                    "Kelm simplifies management of complex app states and asynchronous tasks by enforcing a pattern\n" +
+                        "based on the Elm Architecture."
+                )
                 url.set("http://github.com/AllanHasegawa/kelm")
                 licenses {
                     license {
