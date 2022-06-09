@@ -24,7 +24,7 @@ public class SubContext<SubT : Sub> internal constructor() {
         childElement: Element<ChildModelT, ChildMsgT, ChildCmdT, ChildSubT>,
         childModel: ChildModelT,
         childSubMapper: (ChildSubT) -> SubT
-    ): Unit {
+    ) {
         childElement.subscriptions(childModel)?.map(childSubMapper)?.unaryPlus()
     }
 }
