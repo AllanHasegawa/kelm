@@ -11,11 +11,13 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".signUp.SignUpFormSampleActivity"></activity>
-        <activity android:name=".FoxServiceSampleActivity" />
-        <activity android:name=".ClockSampleActivity" />
-        <activity android:name=".CounterSampleActivity" />
-        <activity android:name=".MainActivity">
+        <activity android:name=".advancedSample.SignUpFormSampleActivity" />
+        <activity android:name=".commandSample.FoxServiceSampleActivity" />
+        <activity android:name=".subscriptionSample.ClockSampleActivity" />
+        <activity android:name=".simpleSample.CounterSampleActivity" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

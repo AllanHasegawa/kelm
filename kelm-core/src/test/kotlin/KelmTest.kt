@@ -1,33 +1,55 @@
-import io.kotlintest.matchers.types.shouldBeInstanceOf
+import E.Cmd
+import E.Model
+import E.Msg
+import E.Sub
+import app.cash.turbine.FlowTurbine
+import app.cash.turbine.testIn
+import io.kotlintest.matchers.types.shouldBeTypeOf
 import io.kotlintest.shouldBe
-import io.reactivex.Maybe
-import io.reactivex.Observable
-import io.reactivex.observers.TestObserver
-import io.reactivex.schedulers.TestScheduler
-import io.reactivex.subjects.PublishSubject
-import io.reactivex.subjects.ReplaySubject
 import kelm.CmdException
+import kelm.DispatcherProvider
+import kelm.Element
 import kelm.ExternalException
-import kelm.Kelm
-import kelm.SubContext
 import kelm.SubscriptionException
-import kelm.UpdateContext
-import org.spekframework.spek2.Spek
-import java.util.concurrent.TimeUnit
+import kelm.buildModelCmds
+import kelm.buildSubs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import kotlin.time.Duration.Companion.minutes
 
-object E : Kelm.Element<E.Model, E.Msg, E.Cmd, E.Sub>() {
+object E : Element<Model, Msg, Cmd, Sub>() {
     data class Model(val count: Int)
+
     sealed class Msg {
         data class Add(val value: Int) : Msg()
         object Ignore : Msg()
         data class StartCmd(val throwError: Boolean) : Msg()
     }
 
-    data class Cmd(val throwError: Boolean) : kelm.Cmd()
+    data class Cmd(val throwError: Boolean)
 
     object Sub : kelm.Sub("the-sub")
 
-    override fun UpdateContext<Model, Msg, Cmd, Sub>.update(model: Model, msg: Msg): Model? =
+    override fun update(model: Model, msg: Msg) = buildModelCmds {
         when (msg) {
             is Msg.Ignore -> null // Ignore when 'add' is 1001
             is Msg.Add -> model.copy(count = model.count + msg.value)
@@ -36,144 +58,207 @@ object E : Kelm.Element<E.Model, E.Msg, E.Cmd, E.Sub>() {
                 null
             }
         }
+    }
 
-    override fun SubContext<Sub>.subscriptions(model: Model) {
+    override fun subscriptions(model: Model) = buildSubs {
         when (model.count) {
-            in 10..Int.MAX_VALUE -> Sub.retainSub()
+            in 10..Int.MAX_VALUE -> +Sub
         }
     }
 
-    override fun errorToMsg(error: ExternalException): Msg? = null
+    override fun exceptionToMsg(exception: ExternalException): Msg? = null
 }
 
-object KelmTest : Spek({
-    group("Given a simple element and an initial model with sum of 0") {
-        val cmdSubj = PublishSubject.create<Unit>()
-        val testScheduler = TestScheduler()
+class KelmTest {
+    private val dispatcher = StandardTestDispatcher()
+    private val dispatcherProvider = DispatcherProvider(dispatcher, dispatcher)
+    private val cmdControl =
+        Channel<Unit>(capacity = Channel.RENDEZVOUS, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
-        fun subToObservable(
-            sub: E.Sub,
-            msgObs: Observable<E.Msg>,
-            modelObs: Observable<E.Model>
-        ): Observable<E.Msg> =
-            Observable
-                .interval(1, TimeUnit.MINUTES, testScheduler)
-                .map { E.Msg.Add(100) as E.Msg }
-                .take(3)
-                .concatWith(Observable.error(IllegalStateException()))
-
-        fun cmdToMaybe(cmd: E.Cmd): Maybe<E.Msg> =
-            when (cmd.throwError) {
-                true -> cmdSubj.map { throw IllegalStateException() }
-                    .cast(E.Msg::class.java)
-                    .firstOrError()
-                    .toMaybe()
-                false -> cmdSubj.map { E.Msg.Add(10) as E.Msg }
-                    .firstOrError()
-                    .toMaybe()
+    private fun subToFlow(
+        sub: Sub,
+        modelFlow: SharedFlow<Model>,
+        msgFlow: SharedFlow<Msg>
+    ): Flow<Msg> =
+        flow {
+            while (currentCoroutineContext().isActive) {
+                delay(1.minutes)
+                emit(Msg.Add(100))
             }
+        }.take(3)
+            .onCompletion { if (it == null) throw IllegalStateException() }
+            .flowOn(dispatcher)
 
-        fun msgs(vararg vs: Any) =
-            ReplaySubject.create<E.Msg> { emitter ->
-                vs.map { v ->
-                    when (v) {
-                        is Int -> E.Msg.Add(v)
-                        is E.Msg.Ignore,
-                        is E.Msg.StartCmd -> v
-                        else -> error("Unknown v")
-                    } as E.Msg
-                }.forEach(emitter::onNext)
+    private suspend fun cmdExecutor(cmd: Cmd): Msg =
+        when (cmd.throwError) {
+            true -> {
+                cmdControl.receive()
+                throw IllegalStateException()
             }
+            false -> {
+                cmdControl.receive()
+                Msg.Add(10)
+            }
+        }
 
-        fun start(msgInput: Observable<E.Msg>) =
-            E.start(
-                initModel = E.Model(0),
-                msgInput = msgInput,
-                cmdToMaybe = ::cmdToMaybe,
-                subToObs = ::subToObservable
-            ).test()
+    private fun msgs(vararg things: Any) =
+        Channel<Msg>(capacity = Channel.UNLIMITED).also {
+            for (t in things) {
+                val asMsg = when (t) {
+                    is Int -> Msg.Add(t)
+                    is Msg.Ignore,
+                    is Msg.StartCmd -> t
+                    else -> error("Unknown v")
+                } as Msg
+                it.trySend(asMsg)
+            }
+        }
 
-        lateinit var testObs: TestObserver<E.Model>
+    private fun start(msgs: Channel<Msg>, scope: CoroutineScope) =
+        E.buildModelFlow(
+            Model(0),
+            msgs,
+            ::cmdExecutor,
+            ::subToFlow,
+            dispatcherProvider = dispatcherProvider
+        ).testIn(scope)
 
-        group("given a sequence of 4 addition msgs and 1 down") {
+    private lateinit var underTest: CoroutineScope.() -> FlowTurbine<Model>
+    private lateinit var runTestContext: (suspend FlowTurbine<Model>.() -> Unit) -> Unit
+
+    @Nested
+    @DisplayName("Given a sequence of 4 additions and 1 subtraction")
+    inner class SimpleUpdate {
+        @BeforeEach
+        fun setUp() {
             val msgs = msgs(1, 1, 1, -1, 1)
-
-            beforeEachTest { testObs = start(msgs) }
-
-            test("the stream should not error") {
-                testObs.assertNoErrors()
-            }
-
-            test("the final state should be 3") {
-                testObs.assertValueSequence(listOf(0, 1, 2, 3, 2, 3).map(E::Model))
-            }
-
-            test("the stream should not complete") {
-                testObs.assertNotComplete()
-            }
+            underTest = { start(msgs, this) }
+            runTestContext = { testBody -> runTest(dispatcher) { underTest().run { testBody() } } }
         }
 
-        group("given a sequence of 4 additions and start cmd msgs") {
-            val msgs = msgs(1, 1, 1, 1, E.Msg.StartCmd(throwError = false))
-
-            beforeEachTest { testObs = start(msgs) }
-
-            test("the cmd should be executed") {
-                cmdSubj.onNext(Unit)
-                testObs.assertValueSequence(listOf(0, 1, 2, 3, 4, 14).map(E::Model))
-            }
+        @Test
+        fun `the stream should not error`() = runTestContext {
+            skipItems(6)
+            cancel()
         }
 
-        group("given a sequence of 4 additions and start cmd with error") {
-            val msgs = msgs(1, 1, 1, 1, E.Msg.StartCmd(throwError = true))
-
-            beforeEachTest { testObs = start(msgs) }
-
-            test("the cmd should throw an error and stop the main stream") {
-                cmdSubj.onNext(Unit)
-                testObs.assertValueSequence(listOf(0, 1, 2, 3, 4).map(E::Model))
-                testObs.assertError(CmdException::class.java)
-
-                val error = testObs.errors().first()
-                error.shouldBeInstanceOf<CmdException>()
-                (error as CmdException).cmd shouldBe E.Cmd(throwError = true)
-            }
+        @Test
+        fun `the final state should be 3`() = runTestContext {
+            awaitItem() shouldBe Model(0)
+            awaitItem() shouldBe Model(1)
+            awaitItem() shouldBe Model(2)
+            awaitItem() shouldBe Model(3)
+            awaitItem() shouldBe Model(2)
+            awaitItem() shouldBe Model(3)
+            cancel()
         }
 
-        group("given a msg of value 10") {
-            val msgs = msgs(10)
-
-            beforeEachTest {
-                testObs = start(msgs)
+        @Test
+        fun `the stream should not complete`() = runTest(dispatcher) {
+            launch {
+                withTimeoutOrNull(10.minutes) {
+                    underTest().run {
+                        skipItems(6)
+                        awaitComplete()
+                    }
+                } shouldBe null
             }
 
-            test("the subscription 'up' should start and increment by 100 each minute") {
-                testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
-                testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
-                testObs.assertValueSequence(listOf(0, 10, 110, 210).map(E::Model))
-            }
+            advanceTimeBy(11 * 60 * 1000)
+        }
+    }
 
-            test("the subscription 'up' should start and throw an error after 3 minutes") {
-                testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
-                testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
-                testScheduler.advanceTimeBy(1, TimeUnit.MINUTES)
-                testObs.assertError(SubscriptionException::class.java)
-
-                val error = testObs.errors().first()
-                (error as SubscriptionException).subscription shouldBe E.Sub
-            }
+    @DisplayName("Given 4 additions and a cmd with msgs")
+    @Nested
+    inner class CmdOk {
+        @BeforeEach
+        fun setUp() {
+            val msgs = msgs(1, 1, 1, 1, Msg.StartCmd(throwError = false))
+            underTest = { start(msgs, this) }
         }
 
-        group("given a sequence of 2 additions, 1 ignored msg, 1 addition") {
-            val msgs = msgs(1, 1, E.Msg.Ignore, 2)
+        @Test
+        fun `the cmd should be executed`() = runTestContext {
+            cmdControl.trySend(Unit)
+            awaitItem() shouldBe Model(0)
+            awaitItem() shouldBe Model(1)
+            awaitItem() shouldBe Model(2)
+            awaitItem() shouldBe Model(3)
+            awaitItem() shouldBe Model(4)
+            awaitItem() shouldBe Model(14)
+            cancel()
+        }
+    }
 
-            beforeEachTest {
-                testObs = start(msgs)
-            }
+    @DisplayName("Given 4 additions and a cmd with error")
+    @Nested
+    inner class CmdError {
+        @BeforeEach
+        fun setUp() {
+            val msgs = msgs(1, 1, 1, 1, Msg.StartCmd(throwError = true))
+            underTest = { start(msgs, this) }
+        }
 
-            test("the ignored msg should not change the final result") {
-                testObs.assertValueSequence(listOf(0, 1, 2, 4).map(E::Model))
+        @Test
+        fun `the cmd should throw an error and cancel the main stream`() = runTestContext {
+            cmdControl.trySend(Unit)
+            awaitItem() shouldBe Model(0)
+            awaitItem() shouldBe Model(1)
+            awaitItem() shouldBe Model(2)
+            awaitItem() shouldBe Model(3)
+            awaitItem() shouldBe Model(4)
+            awaitError().shouldBeTypeOf<CmdException> {
+                it.cmd shouldBe Cmd(throwError = true)
             }
         }
     }
-})
+
+    @DisplayName("Given a msg of value 10")
+    @Nested
+    inner class SubTest {
+        @BeforeEach
+        fun setUp() {
+            val msgs = msgs(10)
+            underTest = { start(msgs, this) }
+        }
+
+        @Test
+        fun `the subscription 'up' should start and increment by 100 each minute`() =
+            runTestContext {
+                awaitItem() shouldBe Model(0)
+                awaitItem() shouldBe Model(10)
+                awaitItem() shouldBe Model(110)
+                awaitItem() shouldBe Model(210)
+                cancel()
+            }
+
+        @Test
+        fun `the subscription 'up' should start and throw an exception after 3 minutes`() =
+            runTestContext {
+                skipItems(4)
+                awaitError().shouldBeTypeOf<SubscriptionException> {
+                    it.subscription shouldBe Sub
+                }
+                cancel()
+            }
+    }
+
+    @DisplayName("Given a sequence of 2 additions, 1 ignored msg, 1 addition")
+    @Nested
+    inner class IgnoreMsg {
+        @BeforeEach
+        fun setUp() {
+            val msgs = msgs(1, 1, Msg.Ignore, 2)
+            underTest = { start(msgs, this) }
+        }
+
+        @Test
+        fun `the ignored msg should not change the final result`() = runTestContext {
+            awaitItem() shouldBe Model(0)
+            awaitItem() shouldBe Model(1)
+            awaitItem() shouldBe Model(2)
+            awaitItem() shouldBe Model(4)
+            cancel()
+        }
+    }
+}
