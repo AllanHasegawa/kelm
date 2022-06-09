@@ -1,7 +1,3 @@
-import java.io.File
-import java.io.FileInputStream
-import java.util.*
-
 plugins {
     kotlin("jvm")
     `maven-publish`
@@ -52,9 +48,9 @@ publishing {
 
     publications {
         create<MavenPublication>("maven") {
-            groupId = "io.github.allanhasegawa.kelm"
+            groupId = project.property("kelm.publish.groupId") as String
             artifactId = "kelm-core"
-            version = "2.0.0-alpha01"
+            version = project.property("kelm.publish.version") as String
 
             from(components["java"])
 
