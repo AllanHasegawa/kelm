@@ -25,9 +25,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Build project
-      - name: Build with Gradle
+      # Build kelm-core module
+      - name: Build core with Gradle
         run: ./gradlew :kelm-core:build
+
+      # Build kelm-android module
+      - name: Build android with Gradle
+        run: ./gradlew :kelm-android:build
 
       # After decoding the secret key, place the file in ~ /.gradle/secring.gpg
       - name: Decode
@@ -35,9 +39,16 @@ jobs:
           echo "${{secrets.SIGNING_SECRET_KEY_RING_FILE}}" > ~/.gradle/secring.gpg.b64
           base64 -d ~/.gradle/secring.gpg.b64 > ~/.gradle/secring.gpg
 
-      # Publish project
-      - name: Publish
+      # Publish kelm-core module
+      - name: Publish kelm-core
         run: ./gradlew :kelm-core:publishMavenPublicationToMavenRepository -Psigning.keyId=${{secrets.SIGNING_KEY_ID}} -Psigning.password="${{secrets.SIGNING_KEY_PASSPHRASE}}" -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg)
+        env:
+          OSSRH_USERNAME: ${{secrets.OSSRH_USERNAME}}
+          OSSRH_PASSWORD: ${{secrets.OSSRH_PASSWORD}}
+
+      # Publish kelm-android module
+      - name: Publish kelm-android
+        run: ./gradlew :kelm-android:publishMavenPublicationToMavenRepository -Psigning.keyId=${{secrets.SIGNING_KEY_ID}} -Psigning.password="${{secrets.SIGNING_KEY_PASSPHRASE}}" -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg)
         env:
           OSSRH_USERNAME: ${{secrets.OSSRH_USERNAME}}
           OSSRH_PASSWORD: ${{secrets.OSSRH_PASSWORD}}
