@@ -16,7 +16,7 @@ Kelm 2 differs from Kelm 1 as it uses Kotlin Coroutines and a simplified API.
 
 ## Download
 
-![Maven Central Badge](https://img.shields.io/maven-central/v/io.github.allanhasegawa.kelm/kelm-core?style=for-the-badge)
+[![Maven Central Badge](https://img.shields.io/maven-central/v/io.github.allanhasegawa.kelm/kelm-core?style=for-the-badge)](https://search.maven.org/artifact/io.github.allanhasegawa.kelm/kelm-core)
 
 Find the latest JAR here: https://repo1.maven.org/maven2/io/github/allanhasegawa/kelm/
 
