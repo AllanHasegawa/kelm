@@ -14,6 +14,24 @@ Kelm 1 is currently the stable version for Kelm and uses RxJava.
 Kelm 2 is currently in Alpha version, which means the API can change in the future.
 Kelm 2 differs from Kelm 1 as it uses Kotlin Coroutines and a simplified API.
 
+## Download
+
+![Maven Central Badge](https://img.shields.io/maven-central/v/io.github.allanhasegawa.kelm/kelm-core?style=for-the-badge)
+
+Find the latest JAR here: https://repo1.maven.org/maven2/io/github/allanhasegawa/kelm/
+
+Or at the following coordinates from Maven Central:
+
+```
+io.github.allanhasegawa.kelm:kelm-core:{version}
+```
+
+**(Optional)** For extra extensions and classes specific to Android, import this instead:
+
+```
+io.github.allanhasegawa.kelm:kelm-android:{version}
+```
+
 ## Introduction
 
 Kelm is an implementation that enforces a pattern for managing complex app states in an asynchronous world.
