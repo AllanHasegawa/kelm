@@ -51,13 +51,13 @@ public class UpdateContext<CmdT> internal constructor() {
      */
     public fun <ModelT, ChildModelT, ChildCmdT> ModelCmds<ChildModelT, ChildCmdT>.toParent(
         modelMapper: (ChildModelT) -> ModelT,
-        cmdMapper: (ChildCmdT) -> CmdT,
+        cmdMapper: (ChildCmdT) -> CmdT?,
         cmdCaptor: ((ChildCmdT) -> ModelT?)? = null,
     ): ModelT? {
         val childCmds = this.cmds
         val parentCmds = this@UpdateContext.cmds
 
-        parentCmds.addAll(childCmds.map(cmdMapper))
+        parentCmds.addAll(childCmds.mapNotNull(cmdMapper))
 
         val capturedParentModel =
             if (cmdCaptor != null) childCmds.firstNotNullOfOrNull { cmdCaptor(it) }
