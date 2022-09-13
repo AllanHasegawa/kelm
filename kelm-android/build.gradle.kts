@@ -45,7 +45,6 @@ dependencies {
 
     implementation(libs.kotlin.coroutines)
     implementation(libs.android.lifecycleViewModelKtx)
-    implementation(libs.android.lifecycleLiveDataKtx)
 }
 
 publishing {

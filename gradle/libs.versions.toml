@@ -29,7 +29,6 @@ android-coroutinesAndroid = { module = "org.jetbrains.kotlinx:kotlinx-coroutines
 android-appCompat = "androidx.appcompat:appcompat:1.6.0-alpha03"
 android-coreKtx = "androidx.core:core-ktx:1.9.0-alpha03"
 android-lifecycleKtx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidLifecycle" }
-android-lifecycleLiveDataKtx = { module = "androidx.lifecycle:lifecycle-livedata-core-ktx", version.ref = "androidLifecycle" }
 android-lifecycleViewModelKtx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "androidLifecycle" }
 android-activityCompose = "androidx.activity:activity-compose:1.4.0"
 android-compose-ui = { module = "androidx.compose.ui:ui", version.ref = "compose" }

@@ -11,8 +11,8 @@ Read the motivation behind Kelm in [this blog post](https://medium.com/android-f
 
 Kelm 1 is currently the stable version for Kelm and uses RxJava.
 
-Kelm 2 is currently in Alpha version, which means the API can change in the future.
-Kelm 2 differs from Kelm 1 as it uses Kotlin Coroutines and a simplified API.
+Kelm 2+ is currently in Alpha version, which means the API can change in the future.
+Kelm 2+ differs from Kelm 1 as it uses Kotlin Coroutines and a simplified API.
 
 ## Download
 

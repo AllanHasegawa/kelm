@@ -1,7 +1,5 @@
 package kelm.android
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kelm.DispatcherProvider
@@ -10,7 +8,9 @@ import kelm.Log
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -20,10 +20,10 @@ abstract class ElementViewModel<ModelT, MsgT, CmdT, SubT : kelm.Sub>(
     initModel: ModelT,
     dispatcherProvider: DispatcherProvider = DispatcherProvider()
 ) : ViewModel() {
-    val model: LiveData<ModelT> get() = _model
+    val model: StateFlow<ModelT> get() = _model
 
     private val msgChannel: SendChannel<MsgT> = Channel()
-    private val _model = MutableLiveData<ModelT>()
+    private val _model = MutableStateFlow(initModel)
 
     init {
         viewModelScope.launch {

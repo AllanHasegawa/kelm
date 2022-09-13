@@ -2,7 +2,7 @@ import E.Cmd
 import E.Model
 import E.Msg
 import E.Sub
-import app.cash.turbine.FlowTurbine
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.testIn
 import io.kotlintest.matchers.types.shouldBeTypeOf
 import io.kotlintest.shouldBe
@@ -13,6 +13,7 @@ import kelm.ExternalException
 import kelm.SubscriptionException
 import kelm.buildModelCmds
 import kelm.buildSubs
+import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -34,7 +35,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import kotlin.time.Duration.Companion.minutes
 
 object E : Element<Model, Msg, Cmd, Sub>() {
     data class Model(val count: Int)
@@ -123,8 +123,8 @@ class KelmTest {
             dispatcherProvider = dispatcherProvider
         ).testIn(scope)
 
-    private lateinit var underTest: CoroutineScope.() -> FlowTurbine<Model>
-    private lateinit var runTestContext: (suspend FlowTurbine<Model>.() -> Unit) -> Unit
+    private lateinit var underTest: CoroutineScope.() -> ReceiveTurbine<Model>
+    private lateinit var runTestContext: (suspend ReceiveTurbine<Model>.() -> Unit) -> Unit
 
     @Nested
     @DisplayName("Given a sequence of 4 additions and 1 subtraction")
